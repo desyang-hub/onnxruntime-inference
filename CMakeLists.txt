@@ -12,6 +12,8 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 # 设置ONNXRUNTIME_ROOT路径
 set(ONNXRUNTIME_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/third_party/onnxruntime)
 
+option(USE_CUDA "Link against onnxruntime-gpu and enable CUDA provider" OFF)
+
 find_path(ONNXRUNTIME_INCLUDE_DIR 
     NAMES onnxruntime_c_api.h
     PATHS ${ONNXRUNTIME_ROOT}/include
@@ -24,11 +26,26 @@ find_library(ONNXRUNTIME_LIBRARY
     NO_DEFAULT_PATH REQUIRED
 )
 
-include_directories(${ONNXRUNTIME_INCLUDE_DIR})
+
+find_package(OpenCV REQUIRED HINTS ${OpenCV_DIR})
 
 add_executable(main 
     src/main.cpp
 )
 
-target_link_libraries(main ${ONNXRUNTIME_LIBRARY}
+if(USE_CUDA)
+    target_compile_definitions(main PRIVATE ENABLE_CUDA)
+    # GPU 版和 CPU 版的库名相同，但安装路径/内容不同
+    # 这里不需要额外 link 什么，因为符号在主库里声明、在 provider so 里实现
+endif()
+
+target_include_directories(main
+    PRIVATE
+    ${OpenCV_INCLUDE_DIRS}
+    ${ONNXRUNTIME_INCLUDE_DIR}
+)
+
+target_link_libraries(main 
+    ${ONNXRUNTIME_LIBRARY}
+    ${OpenCV_LIBS}
 )
