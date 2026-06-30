@@ -49,3 +49,27 @@ target_link_libraries(main
     ${ONNXRUNTIME_LIBRARY}
     ${OpenCV_LIBS}
 )
+
+
+
+add_executable(yolov8_infer 
+    src/yolov8_infer_demo.cpp
+)
+
+if(USE_CUDA)
+    target_compile_definitions(yolov8_infer PRIVATE ENABLE_CUDA)
+    # GPU 版和 CPU 版的库名相同，但安装路径/内容不同
+    # 这里不需要额外 link 什么，因为符号在主库里声明、在 provider so 里实现
+endif()
+
+target_include_directories(yolov8_infer
+    PRIVATE
+    ${OpenCV_INCLUDE_DIRS}
+    ${ONNXRUNTIME_INCLUDE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_link_libraries(yolov8_infer 
+    ${ONNXRUNTIME_LIBRARY}
+    ${OpenCV_LIBS}
+)
