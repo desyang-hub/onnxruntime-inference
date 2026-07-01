@@ -1,0 +1,18 @@
+# 定义可复用的基础模块配置（预处理阶段被引用）
+_base_inference: &base_inference
+  backend: onnxruntime
+  device: cuda
+  batch_size: 1
+  num_threads: 4
+
+# 模块A：继承基础配置并覆盖部分字段
+module_a:
+  <<: *base_inference       # ← 展开锚点（预处理）
+  model_path: models/yolov8n.onnx
+  confidence_threshold: 0.5
+
+# 模块B：同样继承，不同参数
+module_b:
+  <<: *base_inference
+  model_path: models/resnet50.onnx
+  batch_size: 8             # ← 覆盖继承的值
