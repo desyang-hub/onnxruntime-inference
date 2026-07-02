@@ -4,17 +4,20 @@
  * @Author       : desyang
  * @Date         : 2026-07-01 21:12:45
  * @LastEditors  : desyang
- * @LastEditTime : 2026-07-02 11:10:47
+ * @LastEditTime : 2026-07-02 15:44:10
 **/
 #include <string>
 #include <opencv2/opencv.hpp>
 #include <yaml-cpp/yaml.h>
+#include <onnxruntime_cxx_api.h>
 
 #include "runner/detect/YoloDetector.h"
-#include "runner/detect/visual/painter.h"
+#include "visual/painter.h"
 
 int main(int argc, char const *argv[])
 {
+    std::cout << "OnnxRuntime verison: " << Ort::GetVersionString() << std::endl;
+    std::cout << "Opencv version: " << cv::getVersionString() << std::endl;
     std::string config_path = "config/model_config.yaml";
 
     std::string img_path = "/home/desyang/github/onnxruntime-infer/assets/bus.png";
