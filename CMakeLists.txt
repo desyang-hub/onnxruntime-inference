@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.21)
 
 project(ONNXRuntime_infer)
 
@@ -32,11 +32,11 @@ set(ONNXRUNTIME_VERSION 1.18.0)
 
 # sha256sum build/_deps/onnxruntime_prebuilt-subbuild/onnxruntime_prebuilt-populate-prefix/src/onnxruntime-linux-x64-1.18.0.tgz => URL_HASH SHA256=...
 if(WIN32)
-
+    add_compile_definitions(NOMINMAX)
     CPMAddPackage(
         NAME onnxruntime_prebuilt
-        # URL https://gh-proxy.com/https://github.com/microsoft/onnxruntime/releases/download/v${ONNXRUNTIME_VERSION}/onnxruntime-linux-x64-${ONNXRUNTIME_VERSION}.tgz
-        https://github.com/microsoft/onnxruntime/releases/download/v${ONNXRUNTIME_VERSION}/onnxruntime-win-x64-${ONNXRUNTIME_VERSION}.zip
+        URL https://gh-proxy.com/https://github.com/microsoft/onnxruntime/releases/download/v${ONNXRUNTIME_VERSION}/onnxruntime-win-x64-${ONNXRUNTIME_VERSION}.zip
+        # https://github.com/microsoft/onnxruntime/releases/download/v${ONNXRUNTIME_VERSION}/onnxruntime-win-x64-${ONNXRUNTIME_VERSION}.zip
         DOWNLOAD_ONLY YES
     )
 elseif(UNIX AND NOT APPLE)
@@ -56,10 +56,18 @@ endif()
 
 # 创建可直接 link 的导入目标, 从外部导入共享库 IMPORTED(外部导入) GLOBAL 项目全局可见
 add_library(onnxruntime SHARED IMPORTED GLOBAL)
-set_target_properties(onnxruntime PROPERTIES
-    IMPORTED_LOCATION             "${onnxruntime_prebuilt_SOURCE_DIR}/lib/libonnxruntime.so"
-    INTERFACE_INCLUDE_DIRECTORIES "${onnxruntime_prebuilt_SOURCE_DIR}/include"
-)
+if(WIN32)
+    set_target_properties(onnxruntime PROPERTIES
+        IMPORTED_LOCATION             "${onnxruntime_prebuilt_SOURCE_DIR}/lib/onnxruntime.dll"
+        IMPORTED_IMPLIB               "${onnxruntime_prebuilt_SOURCE_DIR}/lib/onnxruntime.lib"
+        INTERFACE_INCLUDE_DIRECTORIES "${onnxruntime_prebuilt_SOURCE_DIR}/include"
+    )
+elseif(UNIX AND NOT APPLE)
+    set_target_properties(onnxruntime PROPERTIES
+        IMPORTED_LOCATION             "${onnxruntime_prebuilt_SOURCE_DIR}/lib/libonnxruntime.so"
+        INTERFACE_INCLUDE_DIRECTORIES "${onnxruntime_prebuilt_SOURCE_DIR}/include"
+    )
+endif()
 
 find_package(OpenCV REQUIRED HINTS ${OpenCV_DIR})
 
@@ -79,14 +87,17 @@ target_include_directories(main
 )
 
 target_link_libraries(main 
-    ${OpenCV_LIBS}
+    opencv_world
     onnxruntime
     yaml-cpp::yaml-cpp
 )
 
+# 用于自动将可执行文件依赖的 dll 复制到输出目录
+include(cmake/copy_runtime_dlls.cmake)
+copy_runtime_dlls(main)
 
 # 编译链接库
-set(INFER_LIB infer_lib)
+set(INFER_LIB onnx_infer)
 add_library(${INFER_LIB} ""
     src/backend/InferenceBackend.cpp
     src/runner/detect/YoloDetector.cpp

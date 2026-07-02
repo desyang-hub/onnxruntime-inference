@@ -1,6 +1,6 @@
 # model_config.yaml
 model:
-  path: "/home/desyang/github/onnxruntime-infer/models/yolov8n.onnx"
+  path: "models/yolov8n.onnx"
   backend: "onnxruntime" # 暂时还没用上
   warm_up: 2
 

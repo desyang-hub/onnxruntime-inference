@@ -1,8 +1,8 @@
 # 查找自己的相对位置
-file(RELATIVE_PATH _rel_dir ${CMAKE_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR})
+# file(RELATIVE_PATH _rel_dir ${CMAKE_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR})
 
-# 设置输出相对目录
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${_rel_dir})
+# # 设置输出相对目录
+# set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${_rel_dir})
 
 # 添加目标文件
 add_executable(yolov8_infer 
@@ -19,13 +19,14 @@ endif()
 target_include_directories(yolov8_infer
     PRIVATE # 目标为可执行文件，直接用PRIVATE
     ${OpenCV_INCLUDE_DIRS}
-    ${ONNXRUNTIME_INCLUDE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
 # 链接库
 target_link_libraries(yolov8_infer
     PRIVATE # 目标为可执行文件，直接用PRIVATE
-    ${ONNXRUNTIME_LIBRARY}
     ${OpenCV_LIBS}
+    ${INFER_LIB}
 )
+
+copy_runtime_dlls(yolov8_infer)

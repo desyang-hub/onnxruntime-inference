@@ -1,10 +1,10 @@
 /**
- * @FilePath     : /onnxruntime-infer/examples/yolov8_infer_demo/include/OnnxInfer.h
+ * @FilePath     : /onnxruntime-inference/examples/yolov8_infer_demo/include/OnnxInfer.h
  * @Description  :  
  * @Author       : desyang
  * @Date         : 2026-06-30 19:50:04
  * @LastEditors  : desyang
- * @LastEditTime : 2026-07-02 14:59:14
+ * @LastEditTime : 2026-07-02 17:21:05
 **/
 #pragma once
 
@@ -15,6 +15,8 @@
 #include <cstdint>
 #include <stdexcept>
 #include <iostream>
+
+#include "arch/arch.h"
 
 class OnnxInfer
 {
@@ -91,7 +93,8 @@ public:
         
         // 创建ONNX会话
         std::unique_ptr<Ort::Session, ort_session_deleter> 
-        session(new Ort::Session(env_, model_path.c_str(), session_options_));
+        session(new Ort::Session(env_, MODEL_PATH(model_path).c_str(), session_options_));
+
         // 创建推理会话
         session_ = std::move(session);
 

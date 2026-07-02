@@ -12,6 +12,7 @@
 #include <stdexcept>
 #include <onnxruntime_cxx_api.h>
 
+#include "arch/arch.h"
 #include "InferenceBackend.h"
 
 class OrtSessionWrapper : public InferenceBackend {
@@ -61,7 +62,7 @@ private:
 
 
 public:
-    explicit OrtSessionWrapper(const std::string& model_path, const Ort::SessionOptions& options = {}) : env_(ORT_LOGGING_LEVEL_ERROR, "OrtSessionWrapper"), session_(env_, model_path.c_str(), options) {
+    explicit OrtSessionWrapper(const std::string& model_path, const Ort::SessionOptions& options = {}) : env_(ORT_LOGGING_LEVEL_ERROR, "OrtSessionWrapper"), session_(env_, MODEL_PATH(model_path).c_str(), options) {
         // 初始化的过程
         size_t input_names_num = session_.GetInputCount();
         size_t output_names_num = session_.GetOutputCount();

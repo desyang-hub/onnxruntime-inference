@@ -8,9 +8,24 @@
 #include <onnxruntime_cxx_api.h>
 #include <opencv2/opencv.hpp>
 
+#ifdef _WIN32
+    #include <windows.h>
+    // UTF-8 string → wstring
+    std::wstring utf8_to_wide(const std::string& utf8) {
+        if (utf8.empty()) return {};
+        int len = MultiByteToWideChar(CP_UTF8, 0, utf8.c_str(), 
+                                    static_cast<int>(utf8.size()), nullptr, 0);
+        std::wstring result(len, L'\0');
+        MultiByteToWideChar(CP_UTF8, 0, utf8.c_str(), 
+                            static_cast<int>(utf8.size()), &result[0], len);
+        return result;
+    }
+#endif
+
 
 int main(int argc, char const *argv[])
 {
+    std::cout << "Main Run" << std::endl;
     std::string model_path = "models/yolov8n.onnx";
     std::string img_path = "assets/bus.png";
 
@@ -45,8 +60,14 @@ int main(int argc, char const *argv[])
         std::cout << "使用cpu推理" << std::endl;
     }
 
+#ifdef _WIN32
+    // 创建推理会话
+    Ort::Session session(env, utf8_to_wide(model_path).c_str(), session_options);
+#else
     // 创建推理会话
     Ort::Session session(env, model_path.c_str(), session_options);
+#endif
+
 
     // 输入输出节点的个数
     size_t input_nodes_num = session.GetInputCount();

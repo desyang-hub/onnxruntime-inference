@@ -1,10 +1,10 @@
 /**
- * @FilePath     : /onnxruntime-infer/examples/yolo_infer/yolo_infer.cpp
+ * @FilePath     : /onnxruntime-inference/examples/yolo_infer/yolo_infer.cpp
  * @Description  :  
  * @Author       : desyang
  * @Date         : 2026-07-01 21:12:45
  * @LastEditors  : desyang
- * @LastEditTime : 2026-07-02 15:44:10
+ * @LastEditTime : 2026-07-02 20:06:41
 **/
 #include <string>
 #include <opencv2/opencv.hpp>
@@ -20,7 +20,7 @@ int main(int argc, char const *argv[])
     std::cout << "Opencv version: " << cv::getVersionString() << std::endl;
     std::string config_path = "config/model_config.yaml";
 
-    std::string img_path = "/home/desyang/github/onnxruntime-infer/assets/bus.png";
+    std::string img_path = "assets/bus.png";
     try
     {
         YoloDetector detector(config_path);
