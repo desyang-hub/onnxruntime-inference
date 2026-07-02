@@ -1,1 +1,2 @@
 add_subdirectory(yaml_usage)
+add_subdirectory(yolo_infer)

@@ -4,7 +4,7 @@
  * @Author       : desyang
  * @Date         : 2026-06-30 19:50:04
  * @LastEditors  : desyang
- * @LastEditTime : 2026-06-30 21:38:34
+ * @LastEditTime : 2026-07-01 21:02:51
 **/
 #pragma once
 
@@ -130,4 +130,52 @@ public:
     virtual void run(const cv::Mat& img) {
         
     }
+
+    std::vector<Ort::Value> inference(const cv::Mat& blob) {
+        Ort::MemoryInfo ort_memory_info = Ort::MemoryInfo::CreateCpu(OrtDeviceAllocator, OrtMemTypeCPU);
+        std::vector<int64_t> input_shape_info{1, inputShapes_[CHANNELS], inputShapes_[HEIGHT], inputShapes_[WIDTH]};
+
+        Ort::Value input_tensor = Ort::Value::CreateTensor<float>(
+            ort_memory_info,
+            (float*)blob.ptr<float>(),
+            blob.total(),
+            input_shape_info.data(),
+            input_shape_info.size()
+        );
+
+        return session_->Run(
+            Ort::RunOptions{},
+            inputNames_.data(),
+            &input_tensor,
+            1,
+            outputNames_.data(),
+            outputNames_.size()
+        );
+    }
+
+    void infer(const cv::Mat& img) {
+        // 预处理阶段
+        Ort::Value input_tensor = preprocess(img);
+
+        // onnxruntime 推理阶段
+        std::vector<Ort::Value> output_tensor = session_->Run(
+            Ort::RunOptions{},
+            inputNames_.data(),
+            &input_tensor,
+            1,
+            outputNames_.data(),
+            outputNames_.size()
+        );
+
+        // 后处理阶段
+        postprocess(output_tensor);
+    }
+
+    // 数据预处理
+    virtual Ort::Value preprocess(const cv::Mat& img) const {
+        return Ort::Value{ nullptr };
+    }
+
+    // 数据后处理
+    virtual void postprocess(const std::vector<Ort::Value>& output_tensor) const {}
 };

@@ -93,8 +93,8 @@ public:
         auto inference_end = std::chrono::high_resolution_clock::now();
 
         // 解析推理结果
-        const float* pdata = ort_outputs[0].GetTensorMutableData<float>();
-        cv::Mat det_output0(numAttributes_, numPredictions_, CV_32F, (float*)pdata);
+        float* pdata = ort_outputs[0].GetTensorMutableData<float>();
+        cv::Mat det_output0(numAttributes_, numPredictions_, CV_32F, pdata);
 
         // 转置，方便后续处理
         cv::Mat det_output;
