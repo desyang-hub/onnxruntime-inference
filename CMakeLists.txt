@@ -87,7 +87,7 @@ target_include_directories(main
 )
 
 target_link_libraries(main 
-    opencv_world
+    ${OpenCV_LIBS}
     onnxruntime
     yaml-cpp::yaml-cpp
 )
