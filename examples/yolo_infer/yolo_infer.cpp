@@ -1,10 +1,10 @@
 /**
- * @FilePath     : /onnxruntime-inference/examples/yolo_infer/yolo_infer.cpp
+ * @FilePath     : /onnxruntime-infer/examples/yolo_infer/yolo_infer.cpp
  * @Description  :  
  * @Author       : desyang
  * @Date         : 2026-07-01 21:12:45
  * @LastEditors  : desyang
- * @LastEditTime : 2026-07-02 20:06:41
+ * @LastEditTime : 2026-07-03 11:02:42
 **/
 #include <string>
 #include <opencv2/opencv.hpp>
@@ -36,7 +36,7 @@ int main(int argc, char const *argv[])
         }
 
 
-        cv::imwrite("output.jpg", img);
+        // cv::imwrite("output.jpg", img);
     }
     catch(const std::exception& e)
     {

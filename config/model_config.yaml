@@ -1,7 +1,16 @@
-# model_config.yaml
+# model_config.yaml used in OrtSessionWarpper
 model:
   path: "models/yolov8n.onnx"
-  backend: "onnxruntime" # 暂时还没用上
+  backend: "onnxruntime"
+  session_options:
+    execution_providers: ["CPUExecutionProvider"]
+    graph_optimization_level: "ORT_ENABLE_ALL"
+    intra_op_num_threads: 4
+    inter_op_num_threads: 1
+    execution_mode: "ORT_SEQUENTIAL"
+    log_severity_level: "ERROR"
+    enable_profiling: false,
+    optimized_model_path: "" # 默认保存到 optimize_xxx.onnx
   warm_up: 2
 
 preprocess:

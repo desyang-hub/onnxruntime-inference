@@ -100,6 +100,7 @@ copy_runtime_dlls(main)
 set(INFER_LIB onnx_infer)
 add_library(${INFER_LIB} ""
     src/backend/InferenceBackend.cpp
+    src/backend/OrtSessionWrapper.cpp
     src/runner/detect/YoloDetector.cpp
     src/runner/ModelRunner.cpp
 )

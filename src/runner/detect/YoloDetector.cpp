@@ -4,7 +4,7 @@
  * @Author       : desyang
  * @Date         : 2026-07-01 15:41:33
  * @LastEditors  : desyang
- * @LastEditTime : 2026-07-02 11:06:46
+ * @LastEditTime : 2026-07-03 10:44:13
 **/
 
 #include <iostream>
@@ -18,7 +18,7 @@ YoloDetector::YoloDetector(const std::string& config_path) :
         // 在 lambda 中独立加载，不依赖任何成员变量
         auto cfg = YAML::LoadFile(config_path);
         return std::make_unique<OrtSessionWrapper>(
-            cfg["model"]["path"].as<std::string>());
+            cfg["model"].as<YAML::Node>());
     }()),
     config_(YAML::LoadFile(config_path)) {  // 成员变量后构造，安全 
 
