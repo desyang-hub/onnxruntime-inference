@@ -9,6 +9,10 @@
 #pragma once
 
 #include <opencv2/opencv.hpp>
+#include <yaml-cpp/yaml.h>
+#include <vector>
+#include <string>
+#include <iostream>
 
 #include "runner/ModelRunner.h"
 
@@ -22,7 +26,22 @@ struct Detection {
 
 class Detector : public ModelRunner
 {
+private:
+    std::vector<std::string> labels_;
 public:
-    explicit Detector(std::unique_ptr<InferenceBackend> backend) : ModelRunner(std::move(backend)) {}
+    explicit Detector(const YAML::Node& config);
+
+    template<class T>
+    static std::unique_ptr<Detector> Load(const std::string& cfg);
+
     virtual std::vector<Detection> detect(const cv::Mat& img) = 0;
+    virtual std::vector<std::vector<Detection>> detect(const std::vector<cv::Mat>& imgs) = 0;
+
+    const std::string& class_label(size_t id) const;
 };
+
+template<class T>
+std::unique_ptr<Detector> Detector::Load(const std::string& cfg) {
+    static_assert(std::is_base_of_v<Detector, T> && "type must inherit Detector.");
+    return std::make_unique<T>(YAML::LoadFile(cfg));
+}

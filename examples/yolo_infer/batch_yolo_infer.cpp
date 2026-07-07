@@ -30,7 +30,7 @@ int main(int argc, char const *argv[])
     std::string img_path = "assets/bus.png";
     try
     {
-        YoloDetector detector(config_path);
+        std::unique_ptr<Detector> detector = Detector::Load<YoloDetector>(config_path);
 
         cv::Mat img = cv::imread(img_path);
 
@@ -40,7 +40,7 @@ int main(int argc, char const *argv[])
 
 
         auto time_start = std::chrono::high_resolution_clock::now();
-        std::vector<std::vector<Detection>> results = detector.detect(imgs);
+        std::vector<std::vector<Detection>> results = detector->detect(imgs);
         auto time_end = std::chrono::high_resolution_clock::now();
 
         std::cout << "Time spends: " << std::chrono::duration_cast<std::chrono::milliseconds>(time_end - time_start).count() << " ms" << std::endl;
@@ -53,7 +53,7 @@ int main(int argc, char const *argv[])
         for (auto& result : results) {
             std::cout << result.size() << " det size" << std::endl;
             for (const auto& det : result) {
-                std::cout << detector.class_label(det.class_id) << " " << det.score << std::endl;
+                std::cout << detector->class_label(det.class_id) << " " << det.score << std::endl;
                 draw_box(img, det, RED);
             }
         }

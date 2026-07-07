@@ -42,7 +42,7 @@ int main(int argc, char const *argv[])
     cap.set(cv::CAP_PROP_FRAME_HEIGHT, 720);
 
     std::string config_path = "config/model_config.yaml";
-    YoloDetector detector(config_path);
+    std::unique_ptr<Detector> detector = Detector::Load<YoloDetector>(config_path);
 
     SPSCQueue<cv::Mat> imgs(100);
 
@@ -55,7 +55,7 @@ int main(int argc, char const *argv[])
         if (frame.empty()) break;
         
         // TIMER_START();
-        std::vector<Detection> dets = detector.detect(frame);
+        std::vector<Detection> dets = detector->detect(frame);
         // TIMER_FINISH();
         draw_boxs(frame, dets);
         imgs.push(std::move(frame));

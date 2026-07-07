@@ -111,6 +111,7 @@ add_library(${INFER_LIB} ""
     src/backend/OrtSessionWrapper.cpp
     src/runner/detect/YoloDetector.cpp
     src/runner/ModelRunner.cpp
+    src/runner/detect/Detector.cpp
 )
 
 if(ENABLE_CUDA)

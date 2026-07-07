@@ -16,14 +16,10 @@
 #include "runner/detect/YoloDetector.h"
 #include "backend/OrtSessionWrapper.h"
 
-YoloDetector::YoloDetector(const std::string& config_path) : 
-    Detector([&config_path]() {
-        // 在 lambda 中独立加载，不依赖任何成员变量
-        auto cfg = YAML::LoadFile(config_path);
-        return std::make_unique<OrtSessionWrapper>(
-            cfg["model"].as<YAML::Node>());
-    }()),
-    config_(YAML::LoadFile(config_path)) {  // 成员变量后构造，安全 
+YoloDetector::YoloDetector(const YAML::Node& config) : 
+    Detector(config["model"]),
+    config_(config) 
+{  // 成员变量后构造，安全 
 
 
 #ifdef ENABLE_CUDA

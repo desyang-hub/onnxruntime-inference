@@ -53,7 +53,7 @@ private:
 #endif
 
 public:
-    explicit YoloDetector(const std::string& config_path);
+    explicit YoloDetector(const YAML::Node& config);
     ~YoloDetector() = default;
 
     TensorBuffer preprocess(const cv::Mat& img);
@@ -66,5 +66,5 @@ public:
 
 
     std::vector<Detection> detect(const cv::Mat& img) override;
-    std::vector<std::vector<Detection>> detect(const std::vector<cv::Mat>& imgs);
+    std::vector<std::vector<Detection>> detect(const std::vector<cv::Mat>& imgs) override;
 };

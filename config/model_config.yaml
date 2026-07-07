@@ -14,19 +14,6 @@ model:
     enable_profiling: false,
     optimized_model_path: "" # 默认保存到 optimize_xxx.onnx
   warm_up: 3
-
-preprocess:
-  auto_aspect_ratio: true
-  pad_color: [114, 114, 114]
-  normalize:
-    mean: [0.0, 0.0, 0.0]
-    std: [1.0, 1.0, 1.0]   # YOLOv8 只做 /255，等价于 std=1
-  bgr_to_rgb: true
-
-postprocess:
-  conf_threshold: 0.25
-  nms_threshold: 0.45
-  max_detections: 300
   classes: [
         "person",        "bicycle",      "car",           "motorcycle",
         "airplane",      "bus",          "train",         "truck",
@@ -49,3 +36,16 @@ postprocess:
         "refrigerator",  "book",         "clock",         "vase",
         "scissors",      "teddy bear",   "hair drier",    "toothbrush"
   ]
+
+preprocess:
+  auto_aspect_ratio: true
+  pad_color: [114, 114, 114]
+  normalize:
+    mean: [0.0, 0.0, 0.0]
+    std: [1.0, 1.0, 1.0]   # YOLOv8 只做 /255，等价于 std=1
+  bgr_to_rgb: true
+
+postprocess:
+  conf_threshold: 0.25
+  nms_threshold: 0.45
+  max_detections: 300

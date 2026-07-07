@@ -9,15 +9,24 @@
 #pragma once
 
 #include <memory>
+#include <yaml-cpp/yaml.h>
 
 #include "backend/InferenceBackend.h"
+
+enum BackendType {
+    BACKEND_ONNXRUNTIME,
+    BACKEND_OPEN_VINO,
+    BACKEND_OTHER_BACKEND
+};
+
+int ParseBackendTypeFromString(const std::string& backend);
 
 class ModelRunner
 {
 public:
     std::unique_ptr<InferenceBackend> backend_;
 protected:
-    explicit ModelRunner(std::unique_ptr<InferenceBackend> backend);
+    explicit ModelRunner(const YAML::Node& config);
     
     ModelOutput infer();
 };
