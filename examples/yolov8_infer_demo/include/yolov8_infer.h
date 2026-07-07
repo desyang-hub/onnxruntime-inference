@@ -37,11 +37,11 @@ public:
 
     //推理方法
     void run(const cv::Mat& img) override {
-        size_t img_width = img.cols;
-        size_t img_height = img.rows;
+        int img_width = img.cols;
+        int img_height = img.rows;
 
         // 将原始图像填充为正方形，多余部分补充零
-        int maxLen = std::max(img_width, img_height);
+        int maxLen = img_width > img_height ? img_width : img_height;
         cv::Mat paddingImg = cv::Mat::zeros(cv::Size(maxLen, maxLen), CV_8UC3);
         cv::Rect roi(0, 0, img_width, img_height);
         img.copyTo(paddingImg(roi)); // 将图像粘贴到左上角
@@ -94,7 +94,7 @@ public:
 
         // 解析推理结果
         float* pdata = ort_outputs[0].GetTensorMutableData<float>();
-        cv::Mat det_output0(numAttributes_, numPredictions_, CV_32F, pdata);
+        cv::Mat det_output0(static_cast<int>(numAttributes_), static_cast<int>(numPredictions_), CV_32F, pdata);
 
         // 转置，方便后续处理
         cv::Mat det_output;

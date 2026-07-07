@@ -121,11 +121,11 @@ int main(int argc, char const *argv[])
 
     
     cv::Mat img = cv::imread(img_path);
-    size_t img_width = img.cols;
-    size_t img_height = img.rows;
+    int img_width = img.cols;
+    int img_height = img.rows;
 
     // 将原始图像填充为正方形，多余部分补充零
-    int maxLen = std::max(img_width, img_height);
+    int maxLen = img_width > img_height ? img_width : img_height;
     cv::Mat paddingImg = cv::Mat::zeros(cv::Size(maxLen, maxLen), CV_8UC3);
     cv::Rect roi(0, 0, img_width, img_height);
     img.copyTo(paddingImg(roi)); // 将图像粘贴到左上角
@@ -179,7 +179,7 @@ int main(int argc, char const *argv[])
     // 模型预热
     std::cout << "模型正在预热" << std::endl;
 
-    for (int i = 0; i < 1000; ++i) {
+    for (int i = 0; i < 3; ++i) {
         try
         {
             session.Run(

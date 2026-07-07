@@ -11,7 +11,7 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
 option(BUILD_EXAMPLES "Build examples" ON)
 message(STATUS "Build examples: ${BUILD_EXAMPLES}")
-option(ENABLE_CUDA "Link against onnxruntime-gpu and enable CUDA provider" ON)
+option(ENABLE_CUDA "Link against onnxruntime-gpu and enable CUDA provider" OFF)
 message(STATUS "Enable CUDA: ${ENABLE_CUDA}")
 
 
@@ -29,23 +29,44 @@ FetchContent_MakeAvailable(yaml-cpp)
 # 使用CPM
 include(cmake/CPM.cmake)
 # ONNX Runtime 1.18.0 Linux x64 CPU 预编译包
-set(ONNXRUNTIME_VERSION 1.18.0)
+if(ENABLE_CUDA)
+    set(ONNXRUNTIME_VERSION 1.25.0)
+else()
+    set(ONNXRUNTIME_VERSION 1.18.0)
+endif()
+
 
 # sha256sum build/_deps/onnxruntime_prebuilt-subbuild/onnxruntime_prebuilt-populate-prefix/src/onnxruntime-linux-x64-1.18.0.tgz => URL_HASH SHA256=...
 
 # mirror: https://gh-proxy.com/<github-url>
 if(WIN32)
+    # 在 CMakeLists.txt 中添加
+    if(MSVC)
+        add_compile_options(/utf-8)
+    endif()
+
     add_compile_definitions(NOMINMAX)
-    CPMAddPackage(
-        NAME onnxruntime_prebuilt
-        URL https://github.com/microsoft/onnxruntime/releases/download/v${ONNXRUNTIME_VERSION}/onnxruntime-win-x64-${ONNXRUNTIME_VERSION}.zip
-        DOWNLOAD_ONLY YES
-    )
+
+    if(ENABLE_CUDA)
+        CPMAddPackage(
+            NAME onnxruntime_prebuilt
+            URL https://github.com/microsoft/onnxruntime/releases/download/v${ONNXRUNTIME_VERSION}/onnxruntime-win-x64-gpu-${ONNXRUNTIME_VERSION}.zip
+            URL_HASH SHA256=125c9fe408f41b9ae1ad7138dac5ebb19a85e65438d1e368d21b50e6abb32f4e
+            DOWNLOAD_ONLY YES
+        )
+    else()
+        CPMAddPackage(
+            NAME onnxruntime_prebuilt
+            URL https://github.com/microsoft/onnxruntime/releases/download/v${ONNXRUNTIME_VERSION}/onnxruntime-win-x64-${ONNXRUNTIME_VERSION}.zip
+            URL_HASH SHA256=a91af21ca8f9bdfa5a1aac3fdd0591384b4e2866d41612925f1758d5522829e7
+            DOWNLOAD_ONLY YES
+        )
+    endif()
 elseif(UNIX AND NOT APPLE)
     if(ENABLE_CUDA)
         CPMAddPackage(
             NAME onnxruntime_prebuilt
-            URL https://github.com/microsoft/onnxruntime/releases/download/v1.25.0/onnxruntime-linux-x64-gpu-1.25.0.tgz
+            URL https://github.com/microsoft/onnxruntime/releases/download/v${ONNXRUNTIME_VERSION}/onnxruntime-linux-x64-gpu-${ONNXRUNTIME_VERSION}.tgz
             URL_HASH SHA256=630d1c292a8e530425bc4047598ce30acece2c4b5b5f4f46b676212302c38d93
             DOWNLOAD_ONLY YES
         )

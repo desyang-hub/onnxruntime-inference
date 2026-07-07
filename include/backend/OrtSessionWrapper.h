@@ -1,10 +1,10 @@
 /**
- * @FilePath     : /onnxruntime-infer/include/backend/OrtSessionWrapper.h
+ * @FilePath     : /onnxruntime-inference/include/backend/OrtSessionWrapper.h
  * @Description  :  
  * @Author       : desyang
  * @Date         : 2026-07-01 13:28:35
  * @LastEditors  : desyang
- * @LastEditTime : 2026-07-03 11:05:03
+ * @LastEditTime : 2026-07-07 17:25:18
 **/
 #pragma once
 
@@ -77,12 +77,12 @@ public:
         std::string graph_optimization_level = 
             config["session_options"]["graph_optimization_level"]
             .as<std::string>("ORT_ENABLE_BASE");
-        size_t intra_op_num_threads = 
+        int intra_op_num_threads = 
             config["session_options"]["intra_op_num_threads"]
-            .as<size_t>(1);
-        size_t inter_op_num_threads = 
+            .as<int>(1);
+        int inter_op_num_threads = 
             config["session_options"]["inter_op_num_threads"]
-            .as<size_t>(1);
+            .as<int>(1);
         std::string execution_mode = 
             config["session_options"]["execution_mode"]
             .as<std::string>("ORT_SEQUENTIAL");
@@ -108,7 +108,7 @@ public:
         session_options.SetLogSeverityLevel(ParseLogSeverityLevel(log_severity_level));
 
         if (enable_profiling) {
-            session_options.EnableProfiling("profiling");
+            session_options.EnableProfiling(STRING_TO_WSTRING("profiling").c_str());
         }
 
         namespace fs = std::filesystem;
@@ -121,7 +121,7 @@ public:
         }
 
         if (!fs::exists(optimized_model_path)) {
-            session_options.SetOptimizedModelFilePath(optimized_model_path.c_str());
+            session_options.SetOptimizedModelFilePath(STRING_TO_WSTRING(optimized_model_path).c_str());
         }
 
         // TensorRT开启会异常，优化算子会推理异常
@@ -198,7 +198,7 @@ public:
         }
         catch(const std::exception& e)
         {
-            throw std::runtime_error("OrtSession create failed!");
+            throw std::runtime_error("OrtSession create failed! error: " + std::string(e.what()));
         }
 
         // 获取当前推理设备信息

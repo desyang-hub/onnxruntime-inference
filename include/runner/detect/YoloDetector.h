@@ -1,15 +1,14 @@
 /**
- * @FilePath     : /onnxruntime-infer/include/runner/detect/YoloDetector.h
+ * @FilePath     : /onnxruntime-inference/include/runner/detect/YoloDetector.h
  * @Description  :  
  * @Author       : desyang
  * @Date         : 2026-07-01 15:34:52
  * @LastEditors  : desyang
- * @LastEditTime : 2026-07-02 11:07:03
+ * @LastEditTime : 2026-07-07 17:26:12
 **/
 #pragma once
 
 #include <yaml-cpp/yaml.h>
-#include <driver_types.h>
 
 #include "Detector.h"
 #include "device/cuda_utils.h"

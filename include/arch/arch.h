@@ -24,9 +24,11 @@
         return result;
     }
     #define MODEL_PATH(model_path) utf8_to_wide(model_path)
+    #define STRING_TO_WSTRING(str) utf8_to_wide(str)
 
 #else
 
     #define MODEL_PATH(model_path) (model_path)
+    #define STRING_TO_WSTRING(str) (str)
 
 #endif

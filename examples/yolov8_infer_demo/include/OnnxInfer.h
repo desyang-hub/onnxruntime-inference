@@ -73,7 +73,7 @@ protected:
     }
 
 public:
-    enum ShapeId {
+    enum ShapeId : uint8_t {
         BATCH,
         CHANNELS,
         WIDTH,
