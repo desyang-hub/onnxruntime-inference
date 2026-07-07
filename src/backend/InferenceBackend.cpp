@@ -8,10 +8,15 @@
 **/
 #include "backend/InferenceBackend.h"
 
+void InferenceBackend::init() {
+    if (is_init_) return;
+    tensorBuffer_ = TensorBuffer::create(shapes());
+    is_init_ = true;
+}
 
 void InferenceBackend::warm_up(size_t cnt) {
-    TensorBuffer tensor_buf = TensorBuffer::create(shapes());
     for (int i = 0; i < cnt; ++i) {
-        run(tensor_buf);
+        run();
     }
+    std::cout << "热身已完成" << std::endl;
 }

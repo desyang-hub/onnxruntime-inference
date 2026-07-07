@@ -10,6 +10,8 @@
 #include <opencv2/opencv.hpp>
 #include <yaml-cpp/yaml.h>
 #include <onnxruntime_cxx_api.h>
+#include <chrono>
+#include <cstdlib>  // 必须包含这个头文件
 
 #include "runner/detect/YoloDetector.h"
 #include "visual/painter.h"
@@ -20,6 +22,11 @@ int main(int argc, char const *argv[])
     std::cout << "Opencv version: " << cv::getVersionString() << std::endl;
     std::string config_path = "config/model_config.yaml";
 
+    size_t batch = 4;
+    std::vector<cv::Mat> imgs;
+    imgs.reserve(batch);
+    size_t cnt = 10;
+
     std::string img_path = "assets/bus.png";
     try
     {
@@ -27,19 +34,31 @@ int main(int argc, char const *argv[])
 
         cv::Mat img = cv::imread(img_path);
 
-        auto time_start = std::chrono::high_resolution_clock::now();
-        std::vector<Detection> detections = detector.detect(img);
-        auto time_end = std::chrono::high_resolution_clock::now();
-        
-        std::cout << "Time spends: " << std::chrono::duration_cast<std::chrono::milliseconds>(time_end - time_start).count() << " ms" << std::endl;
-    
-        std::cout << "detection num: " << detections.size() << std::endl;
-
-        for (const auto& det : detections) {
-            std::cout << detector.class_label(det.class_id) << " " << det.score << std::endl;
-            draw_box(img, det, RED);
+        for (int i = 0; i < batch; ++i) {
+            imgs.push_back(img.clone());
         }
 
+
+        auto time_start = std::chrono::high_resolution_clock::now();
+        std::vector<std::vector<Detection>> results = detector.detect(imgs);
+        auto time_end = std::chrono::high_resolution_clock::now();
+
+        std::cout << "Time spends: " << std::chrono::duration_cast<std::chrono::milliseconds>(time_end - time_start).count() << " ms" << std::endl;
+
+        std::cout << std::endl;
+
+        
+        std::cout << results.size() << " results num" << std::endl;
+
+        for (auto& result : results) {
+            std::cout << result.size() << " det size" << std::endl;
+            for (const auto& det : result) {
+                std::cout << detector.class_label(det.class_id) << " " << det.score << std::endl;
+                draw_box(img, det, RED);
+            }
+        }
+
+        std::cout << "inference ending" << std::endl;
 
         // cv::imwrite("output.jpg", img);
     }
@@ -49,7 +68,7 @@ int main(int argc, char const *argv[])
     }
     
     
-    
+    std::cout << "program finish" << std::endl;
     
     return 0;
 }

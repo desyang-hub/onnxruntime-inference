@@ -19,5 +19,5 @@ public:
 protected:
     explicit ModelRunner(std::unique_ptr<InferenceBackend> backend);
     
-    ModelOutput infer(const TensorBuffer&);
+    ModelOutput infer();
 };

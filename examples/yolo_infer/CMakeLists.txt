@@ -20,3 +20,19 @@ add_custom_command(TARGET yolo_infer POST_BUILD
         "$<TARGET_FILE_DIR:yolo_infer>/config/model_config.yaml"
     COMMENT "[Config] Copying model_config.yaml for yolo_infer..."
 )
+
+add_executable(video_infer
+    video_infer.cpp
+)
+
+target_link_libraries(video_infer
+    ${INFER_LIB}
+)
+
+add_executable(batch_yolo_infer
+    batch_yolo_infer.cpp
+)
+
+target_link_libraries(batch_yolo_infer
+    ${INFER_LIB}
+)

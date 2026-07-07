@@ -6,6 +6,6 @@ ModelRunner::ModelRunner(std::unique_ptr<InferenceBackend> backend) : backend_(s
     
 }
 
-ModelOutput ModelRunner::infer(const TensorBuffer& tb) {
-    return backend_->run(tb);
+ModelOutput ModelRunner::infer() {
+    return backend_->run();
 }

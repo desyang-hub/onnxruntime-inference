@@ -7,11 +7,13 @@
 
 #include <onnxruntime_cxx_api.h>
 #include <opencv2/opencv.hpp>
+// #include <cuda_runtime.h>
+// #include <cuda_device_runtime_api.h>
 
 #ifdef _WIN32
     #include <windows.h>
     // UTF-8 string → wstring
-    std::wstring utf8_to_wide(const std::string& utf8) {
+    inline std::wstring utf8_to_wide(const std::string& utf8) {
         if (utf8.empty()) return {};
         int len = MultiByteToWideChar(CP_UTF8, 0, utf8.c_str(), 
                                     static_cast<int>(utf8.size()), nullptr, 0);
@@ -53,9 +55,20 @@ int main(int argc, char const *argv[])
     bool isCudaAvailable = std::find(providers.begin(), providers.end(), "CUDAExecutionProvider") != providers.end();
 
     if (isCudaAvailable) {
-#ifdef ENABLE_CUDA
-        OrtSessionOptionsAppendExecutionProvider_CUDA(session_options, 0);
-#endif
+        try
+        {
+            OrtCUDAProviderOptions cuda_options{};
+            cuda_options.device_id = 0;
+            cuda_options.cudnn_conv_algo_search = OrtCudnnConvAlgoSearchHeuristic; // 快速启动
+            cuda_options.gpu_mem_limit = 2ULL * 1024 * 1024 * 1024;               // 限制 4GB
+            cuda_options.do_copy_in_default_stream = 1;
+
+            session_options.AppendExecutionProvider_CUDA(cuda_options);
+        }
+        catch(const std::exception& e)
+        {
+            std::cerr << "CUDA device not available: " << e.what() << std::endl;
+        }
     } else {
         std::cout << "使用cpu推理" << std::endl;
     }
@@ -166,7 +179,7 @@ int main(int argc, char const *argv[])
     // 模型预热
     std::cout << "模型正在预热" << std::endl;
 
-    for (int i = 0; i < 3; ++i) {
+    for (int i = 0; i < 1000; ++i) {
         try
         {
             session.Run(
@@ -187,6 +200,7 @@ int main(int argc, char const *argv[])
     std::cout << "预热完成" << std::endl;
 
     
+    auto start_time = std::chrono::high_resolution_clock::now();
     std::vector<Ort::Value> ort_outputs;
     try
     {
@@ -204,6 +218,9 @@ int main(int argc, char const *argv[])
         std::cerr << e.what() << '\n';
         return -1;
     }
+
+    auto time_end = std::chrono::high_resolution_clock::now();
+    std::cout << "spend times: " <<  std::chrono::duration_cast<std::chrono::milliseconds>(time_end - start_time).count() << " ms";
 
     std::cout << "推理完成" << std::endl;
 
@@ -310,17 +327,15 @@ int main(int argc, char const *argv[])
         }
 	}
 
-	cv::imshow("DetectResult", img);
+	
 	cv::imwrite("./assets/output.jpg", img);
 
+    
 	auto inference_duration = std::chrono::duration_cast<std::chrono::milliseconds>(inference_end - infer_start_time).count();
 	std::cout << model_path << "模型推理耗时: " << inference_duration << " ms" << std::endl;
 
-	cv::waitKey(0);
-
-	// 释放资源
-	session_options.release();
-	session.release();
+    // cv::imshow("DetectResult", img);
+	// cv::waitKey(0);
     
 
     return 0;

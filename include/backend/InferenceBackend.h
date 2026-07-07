@@ -13,6 +13,7 @@
 #include <cstdint>
 #include <unordered_map>
 #include <onnxruntime_cxx_api.h>
+#include <stdexcept>
 
 #include "TensorBuffer.h"
 
@@ -41,11 +42,53 @@ struct ModelOutput {
 
 class InferenceBackend
 {
+private:
+    TensorBuffer tensorBuffer_;
+    bool is_init_ = false;
+
+    bool is_gpu_active_ = false;
+    int active_gpu_id_ = -1;
+
+    void init();
+
 public:
     InferenceBackend() = default;
     virtual ~InferenceBackend() = default;
     virtual const std::vector<int64_t>& shapes() const = 0;
-    virtual ModelOutput run(const TensorBuffer& buffer) = 0;
+    virtual ModelOutput run() = 0;
 
+    TensorBuffer& tensorBuffer() {
+        if (!is_init_)
+            init();
+        
+        return tensorBuffer_;
+    }
+
+    const TensorBuffer& tensorBuffer() const {
+        if (!is_init_) throw std::runtime_error("backend not init.");
+        return tensorBuffer_;
+    }
+
+    bool isGPUActivate() const {
+        return is_gpu_active_;
+    }
+
+    void enableGPUActivate() {
+        is_gpu_active_ = true;
+    }
+
+    int activateGPUId() const {
+        return active_gpu_id_;
+    }
+
+    void setactivateGPUId(int gpu_id) {
+        active_gpu_id_ = gpu_id;
+    }
+
+    // warm_up 中包含了初始化，不论cnt是否为0，都必须调用
     void warm_up(size_t cnt);
+
+    /// @brief 用于返回后端推理引擎返回的缓存数据指针
+    /// @return 
+    virtual float* data() = 0;
 };

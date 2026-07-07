@@ -11,7 +11,8 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
 option(BUILD_EXAMPLES "Build examples" ON)
 message(STATUS "Build examples: ${BUILD_EXAMPLES}")
-option(USE_CUDA "Link against onnxruntime-gpu and enable CUDA provider" OFF)
+option(ENABLE_CUDA "Link against onnxruntime-gpu and enable CUDA provider" ON)
+message(STATUS "Enable CUDA: ${ENABLE_CUDA}")
 
 
 
@@ -31,27 +32,34 @@ include(cmake/CPM.cmake)
 set(ONNXRUNTIME_VERSION 1.18.0)
 
 # sha256sum build/_deps/onnxruntime_prebuilt-subbuild/onnxruntime_prebuilt-populate-prefix/src/onnxruntime-linux-x64-1.18.0.tgz => URL_HASH SHA256=...
+
+# mirror: https://gh-proxy.com/<github-url>
 if(WIN32)
     add_compile_definitions(NOMINMAX)
     CPMAddPackage(
         NAME onnxruntime_prebuilt
-        URL https://gh-proxy.com/https://github.com/microsoft/onnxruntime/releases/download/v${ONNXRUNTIME_VERSION}/onnxruntime-win-x64-${ONNXRUNTIME_VERSION}.zip
-        # https://github.com/microsoft/onnxruntime/releases/download/v${ONNXRUNTIME_VERSION}/onnxruntime-win-x64-${ONNXRUNTIME_VERSION}.zip
+        URL https://github.com/microsoft/onnxruntime/releases/download/v${ONNXRUNTIME_VERSION}/onnxruntime-win-x64-${ONNXRUNTIME_VERSION}.zip
         DOWNLOAD_ONLY YES
     )
 elseif(UNIX AND NOT APPLE)
-    CPMAddPackage(
-        NAME onnxruntime_prebuilt
-        URL https://gh-proxy.com/https://github.com/microsoft/onnxruntime/releases/download/v${ONNXRUNTIME_VERSION}/onnxruntime-linux-x64-${ONNXRUNTIME_VERSION}.tgz
-        # URL https://github.com/microsoft/onnxruntime/releases/download/v1.18.0/onnxruntime-linux-x64-1.18.0.tgz
-        URL_HASH SHA256=fa4d11b3fa1b2bf1c3b2efa8f958634bc34edc95e351ac2a0408c6ad5c5504f0
-        DOWNLOAD_ONLY YES
-    )
+    if(ENABLE_CUDA)
+        CPMAddPackage(
+            NAME onnxruntime_prebuilt
+            URL https://github.com/microsoft/onnxruntime/releases/download/v1.25.0/onnxruntime-linux-x64-gpu-1.25.0.tgz
+            URL_HASH SHA256=630d1c292a8e530425bc4047598ce30acece2c4b5b5f4f46b676212302c38d93
+            DOWNLOAD_ONLY YES
+        )
+    else()
+        CPMAddPackage(
+            NAME onnxruntime_prebuilt
+            URL https://github.com/microsoft/onnxruntime/releases/download/v${ONNXRUNTIME_VERSION}/onnxruntime-linux-x64-${ONNXRUNTIME_VERSION}.tgz
+            URL_HASH SHA256=fa4d11b3fa1b2bf1c3b2efa8f958634bc34edc95e351ac2a0408c6ad5c5504f0
+            DOWNLOAD_ONLY YES
+        )
+    endif()
 else()
     message(FATAL_ERROR "Unsupported platform for ONNX Runtime prebuilt")
 endif()
-
-
 
 
 # 创建可直接 link 的导入目标, 从外部导入共享库 IMPORTED(外部导入) GLOBAL 项目全局可见
@@ -69,32 +77,11 @@ elseif(UNIX AND NOT APPLE)
     )
 endif()
 
+# 1. 查找 OpenMP 包
+find_package(OpenMP REQUIRED)
+# 2. 查找 OpenCV 包
 find_package(OpenCV REQUIRED HINTS ${OpenCV_DIR})
 
-add_executable(main 
-    src/main.cpp
-)
-
-if(USE_CUDA)
-    target_compile_definitions(main PRIVATE ENABLE_CUDA)
-    # GPU 版和 CPU 版的库名相同，但安装路径/内容不同
-    # 这里不需要额外 link 什么，因为符号在主库里声明、在 provider so 里实现
-endif()
-
-target_include_directories(main
-    PRIVATE
-    ${OpenCV_INCLUDE_DIRS}
-)
-
-target_link_libraries(main 
-    ${OpenCV_LIBS}
-    onnxruntime
-    yaml-cpp::yaml-cpp
-)
-
-# 用于自动将可执行文件依赖的 dll 复制到输出目录
-include(cmake/copy_runtime_dlls.cmake)
-copy_runtime_dlls(main)
 
 # 编译链接库
 set(INFER_LIB onnx_infer)
@@ -104,6 +91,19 @@ add_library(${INFER_LIB} ""
     src/runner/detect/YoloDetector.cpp
     src/runner/ModelRunner.cpp
 )
+
+if(ENABLE_CUDA)
+    find_package(CUDAToolkit REQUIRED)
+
+    target_compile_definitions(${INFER_LIB}
+        PUBLIC ENABLE_CUDA
+    )
+    
+    target_link_libraries(${INFER_LIB} 
+        PUBLIC
+        CUDA::cudart
+    )
+endif()
 
 target_include_directories(${INFER_LIB}
     PUBLIC
@@ -116,9 +116,30 @@ target_link_libraries(${INFER_LIB}
     ${OpenCV_LIBS}
     onnxruntime
     yaml-cpp::yaml-cpp
+    OpenMP::OpenMP_CXX
 )
 
+add_executable(main 
+    src/main.cpp
+)
 
+target_include_directories(main 
+    PUBLIC
+    ${OpenCV_INCLUDE_DIRS}
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_link_libraries(main 
+    PUBLIC
+    ${OpenCV_LIBS}
+    onnxruntime
+)
+
+# 用于自动将可执行文件依赖的 dll 复制到输出目录
+include(cmake/copy_runtime_dlls.cmake)
+copy_runtime_dlls(main)
+
+# 构建 exmples 子目录程序
 if(BUILD_EXAMPLES)
     add_subdirectory(examples)
 endif()
