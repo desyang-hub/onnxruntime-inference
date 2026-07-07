@@ -29,6 +29,6 @@
 #else
 
     #define MODEL_PATH(model_path) (model_path)
-    #define STRING_TO_WSTRING(str) (str)
+    #define STRING_TO_WSTRING(str) std::string(str)
 
 #endif
