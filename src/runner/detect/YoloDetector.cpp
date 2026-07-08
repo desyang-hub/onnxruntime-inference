@@ -1,10 +1,10 @@
 /**
- * @FilePath     : /onnxruntime-infer/src/runner/detect/YoloDetector.cpp
+ * @FilePath     : /onnxruntime-inference/src/runner/detect/YoloDetector.cpp
  * @Description  :  
  * @Author       : desyang
  * @Date         : 2026-07-01 15:41:33
  * @LastEditors  : desyang
- * @LastEditTime : 2026-07-03 10:44:13
+ * @LastEditTime : 2026-07-08 15:52:38
 **/
 
 #include <iostream>
@@ -36,7 +36,7 @@ YoloDetector::YoloDetector(const YAML::Node& config) :
     pad_color_          = cv::Scalar(pc[0], pc[1], pc[2]);
     norm_scale_         = 1.0f / 255.0f;
     bgr2rgb_            = config_["preprocess"]["bgr_to_rgb"].as<bool>(true);
-    labels_ = config_["postprocess"]["classes"].as<std::vector<std::string>>();
+    // labels_ = config_["postprocess"]["classes"].as<std::vector<std::string>>();
 
     conf_threshold_     = config_["postprocess"]["conf_threshold"].as<float>(0.25);
     nms_threshold_      = config_["postprocess"]["nms_threshold"].as<float>(0.45);
