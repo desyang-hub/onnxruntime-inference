@@ -14,9 +14,6 @@
 #include "device/cuda_utils.h"
 #include "TensorBuffer.h"
 
-
-class ModelOutput;
-
 class YoloDetector : public Detector
 {
 private:

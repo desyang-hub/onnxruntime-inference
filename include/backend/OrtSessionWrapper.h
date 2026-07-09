@@ -261,7 +261,8 @@ public:
                 // 关键：用 Session 构造 Allocator
                 // 如果该设备未被 Session 接受，这里会抛异常
                 allocator_ = std::make_unique<Ort::Allocator>(*session_, mem_info);
-                Ort::Allocator allocator(*session_, mem_info);
+                // Ort::Allocator allocator(*session_, mem_info);
+                // Ort::Allocator 提供了 GetInfo() 方法,包含了该分配器绑定的设备类型、设备ID、内存类型和分配策略。
                 
                 setactivateGPUId(candidate.device_id);
                 enableGPUActivate();

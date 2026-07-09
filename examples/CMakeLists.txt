@@ -1,3 +1,4 @@
 add_subdirectory(yaml_usage)
 add_subdirectory(yolo_infer)
 add_subdirectory(yolov8_infer_demo)
+add_subdirectory(restorer_demo)

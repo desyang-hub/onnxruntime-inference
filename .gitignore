@@ -4,3 +4,7 @@ build/
 
 # TensorRT缓存，首次推理时间较长
 trt_cache/
+
+bin/
+lib/
+output/

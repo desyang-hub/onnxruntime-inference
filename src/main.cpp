@@ -10,6 +10,9 @@
 // #include <cuda_runtime.h>
 // #include <cuda_device_runtime_api.h>
 
+#include <filesystem>
+namespace fs = std::filesystem;
+
 #ifdef _WIN32
     #include <windows.h>
     // UTF-8 string → wstring
@@ -327,8 +330,8 @@ int main(int argc, char const *argv[])
         }
 	}
 
-	
-	cv::imwrite("./assets/output.jpg", img);
+	fs::create_directory("output");
+	cv::imwrite("./output/bus.jpg", img);
 
     
 	auto inference_duration = std::chrono::duration_cast<std::chrono::milliseconds>(inference_end - infer_start_time).count();

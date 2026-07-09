@@ -1,0 +1,8 @@
+function(copy_config_dir_to_target TARGET_NAME SRC_DIR DEST_SUBDIR)
+    add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${SRC_DIR}"
+            "$<TARGET_FILE_DIR:${TARGET_NAME}>/${DEST_SUBDIR}"
+        COMMENT "[Config] Copying directory '${SRC_DIR}' -> '${DEST_SUBDIR}/' for ${TARGET_NAME}..."
+    )
+endfunction()

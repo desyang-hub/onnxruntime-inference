@@ -27,6 +27,7 @@ public:
     std::unique_ptr<InferenceBackend> backend_;
 protected:
     explicit ModelRunner(const YAML::Node& config);
+    virtual ~ModelRunner() = default;
     
     ModelOutput infer();
 };
