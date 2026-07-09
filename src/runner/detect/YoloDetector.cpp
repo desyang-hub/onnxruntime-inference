@@ -4,7 +4,7 @@
  * @Author       : desyang
  * @Date         : 2026-07-01 15:41:33
  * @LastEditors  : desyang
- * @LastEditTime : 2026-07-08 15:52:38
+ * @LastEditTime : 2026-07-09 15:56:33
 **/
 
 #include <iostream>
@@ -312,16 +312,15 @@ std::vector<std::vector<Detection>> YoloDetector::postprocess(const TensorBuffer
 
 std::vector<Detection> YoloDetector::detect(const cv::Mat& img) {
     TIMER_START_TAG(preprocess);
-    TensorBuffer tensor = preprocess(img);
+    preprocess(std::vector<cv::Mat>{img});
     TIMER_FINISH_TAG(preprocess)
+
     TIMER_START_TAG(infer);
     ModelOutput infer_out = infer();
-
-    infer_out.primary().letterbox_params = tensor.letterbox_params;
     TIMER_FINISH_TAG(infer);
 
     TIMER_START_TAG(postprocess);
-    auto res = postprocess(infer_out.primary());
+    auto res = postprocess(infer_out.primary(), 1).front();
     TIMER_FINISH_TAG(postprocess);
 
 

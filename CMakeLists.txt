@@ -140,12 +140,15 @@ target_include_directories(${INFER_LIB}
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/setup_spdlog.cmake)
+
 target_link_libraries(${INFER_LIB} 
     PUBLIC
     ${OpenCV_LIBS}
     onnxruntime
     yaml-cpp::yaml-cpp
     OpenMP::OpenMP_CXX
+    logger
 )
 
 add_executable(main 
@@ -162,6 +165,7 @@ target_link_libraries(main
     PUBLIC
     ${OpenCV_LIBS}
     onnxruntime
+    logger
 )
 
 # 用于自动将可执行文件依赖的 dll 复制到输出目录

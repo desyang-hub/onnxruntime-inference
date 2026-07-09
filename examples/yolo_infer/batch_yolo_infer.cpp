@@ -16,8 +16,12 @@
 #include "runner/detect/YoloDetector.h"
 #include "visual/painter.h"
 
+#include "logger/logger.h"
+
 int main(int argc, char const *argv[])
 {
+    logger::Init();
+
     std::cout << "OnnxRuntime verison: " << Ort::GetVersionString() << std::endl;
     std::cout << "Opencv version: " << cv::getVersionString() << std::endl;
     std::string config_path = "config/model_config.yaml";

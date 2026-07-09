@@ -8,6 +8,8 @@
 **/
 #include "backend/InferenceBackend.h"
 
+#include "logger/logger.h"
+
 void InferenceBackend::init() {
     if (is_init_) return;
     tensorBuffer_ = TensorBuffer::create(shapes());
@@ -18,5 +20,6 @@ void InferenceBackend::warm_up(size_t cnt) {
     for (int i = 0; i < cnt; ++i) {
         run();
     }
-    std::cout << "热身已完成" << std::endl;
+    // std::cout << "热身已完成" << std::endl;
+    LOG_INFO("Backend warm up successfully");
 }
