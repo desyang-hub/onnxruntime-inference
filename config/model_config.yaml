@@ -5,7 +5,7 @@ model:
   shape: [640, 640] # h, w
   batch: 4 # 推理过程中缓存的batch
   session_options:
-    execution_providers: ["CPUExecutionProvider"]
+    execution_providers: ["TensorrtExecutionProvider", CUDAExecutionProvider] # 不填默认为CPUExecutionProvider
     graph_optimization_level: "ORT_ENABLE_ALL"
     intra_op_num_threads: 4
     inter_op_num_threads: 1

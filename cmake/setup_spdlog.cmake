@@ -20,7 +20,9 @@ target_include_directories(logger_core PUBLIC
 target_link_libraries(logger_core PUBLIC spdlog::spdlog)
 target_compile_definitions(logger_core PUBLIC
     # SPDLOG_FMT_EXTERNAL=0
-    LOG_LEVEL_DEFAULT=2
+    # LOG_LEVEL_DEFAULT=2
+    $<$<CONFIG:Debug>:LOG_LEVEL_DEFAULT=1>    # Debug 保留 debug
+    $<$<CONFIG:Release>:LOG_LEVEL_DEFAULT=2>  # Release 从 info 开始
 )
 
 # 3. INTERFACE 包装层

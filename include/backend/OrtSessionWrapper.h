@@ -136,7 +136,10 @@ public:
 
 
         // 获取环境中可用的推理设备
-        auto execute_providers = Ort::GetAvailableProviders();
+        // auto execute_providers = Ort::GetAvailableProviders();
+        std::vector<std::string> execute_providers = 
+            config["session_options"]["execution_providers"]
+            .as<std::vector<std::string>>();
         // for (int i = 0; i < execute_providers.size(); ++i) {
         //     std::cout << execute_providers[i] << std::endl;
         // }
