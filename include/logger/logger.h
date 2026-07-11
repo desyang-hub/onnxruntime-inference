@@ -4,19 +4,42 @@
  */
 #pragma once
 
+// 在包含 spdlog.h 之前
+#ifndef SPDLOG_ACTIVE_LEVEL
+    #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_DEBUG  // ← 改为 DEBUG
+#endif
+
 #include <string>
 #include <spdlog/spdlog.h> 
+#include <iostream>
 
 namespace logger {
 
 enum LoggerLevel {
+    LOGLEVEL_TRACE,
     LOGLEVEL_DEBUG,
+    LOGLEVEL_INFO,
     LOGLEVEL_WARN,
     LOGLEVEL_ERROR,
-    LOGLEVEL_CRITICAL,
-    LOGLEVEL_TRACE,
-    LOGLEVEL_INFO
+    LOGLEVEL_CRITICAL
 };
+
+inline spdlog::level::level_enum GetBuildDefaultLevel() {
+// #if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
+//     return spdlog::level::trace;
+#if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_DEBUG
+    return spdlog::level::debug;
+#else
+    return spdlog::level::info;
+#endif
+}
+
+// inline 保证：多TU包含时只有一个实例，且不会被链接器丢弃
+inline struct DefaultLoggerInitializer {
+    DefaultLoggerInitializer() {
+        spdlog::set_level(GetBuildDefaultLevel());
+    }
+} g_default_logger_initializer;
 
 /**
  * @brief 初始化日志系统
@@ -52,7 +75,7 @@ std::shared_ptr<spdlog::logger>& GetInstance();
 #define LOG_CRITICAL(...) SPDLOG_CRITICAL(__VA_ARGS__)
 
 // 带源码位置信息的日志宏（调试用）
-#define LOG_DEBUG_LOC(...) SPDLOG_DEBUG("{}:{} [{}] " __VA_ARGS__, __FILE__, __LINE__, __FUNCTION__)
-#define LOG_INFO_LOC(...)  SPDLOG_INFO("{}:{} [{}] " __VA_ARGS__, __FILE__, __LINE__, __FUNCTION__)
-#define LOG_WARN_LOC(...)  SPDLOG_WARN("{}:{} [{}] " __VA_ARGS__, __FILE__, __LINE__, __FUNCTION__)
-#define LOG_ERROR_LOC(...) SPDLOG_ERROR("{}:{} [{}] " __VA_ARGS__, __FILE__, __LINE__, __FUNCTION__)
+#define LOG_DEBUG_LOC(fmt, ...) SPDLOG_DEBUG("{}:{} [{}] " fmt, __FILE__, __LINE__, __FUNCTION__, ##__VA_ARGS__)
+#define LOG_INFO_LOC(fmt, ...)  SPDLOG_INFO("{}:{} [{}] " fmt, __FILE__, __LINE__, __FUNCTION__, ##__VA_ARGS__)
+#define LOG_WARN_LOC(fmt, ...)  SPDLOG_WARN("{}:{} [{}] " fmt, __FILE__, __LINE__, __FUNCTION__, ##__VA_ARGS__)
+#define LOG_ERROR_LOC(fmt, ...) SPDLOG_ERROR("{}:{} [{}] " fmt, __FILE__, __LINE__, __FUNCTION__, ##__VA_ARGS__)

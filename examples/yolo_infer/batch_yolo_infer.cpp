@@ -17,11 +17,13 @@
 #include "visual/painter.h"
 
 #include "logger/logger.h"
+#include "scheduler/SyncScheduler.h"
+#include "scheduler/AsyncScheduler.h"
 
 int main(int argc, char const *argv[])
 {
-    logger::Init();
-
+    // logger::Init(logger::LOGLEVEL_TRACE); // 开启才会打印TRACE
+    LOG_TRACE("step");
     std::cout << "OnnxRuntime verison: " << Ort::GetVersionString() << std::endl;
     std::cout << "Opencv version: " << cv::getVersionString() << std::endl;
     std::string config_path = "config/model_config.yaml";
@@ -34,7 +36,10 @@ int main(int argc, char const *argv[])
     std::string img_path = "assets/bus.png";
     try
     {
-        std::unique_ptr<Detector> detector = Detector::Load<YoloDetector>(config_path);
+        // std::unique_ptr<Detector> detector = Detector::Load<YoloDetector>(config_path);
+
+        
+        std::shared_ptr<Detector> detector = std::make_shared<YoloDetector>(YAML::LoadFile(config_path));
 
         cv::Mat img = cv::imread(img_path);
 
@@ -42,25 +47,43 @@ int main(int argc, char const *argv[])
             imgs.push_back(img.clone());
         }
 
-
-        auto time_start = std::chrono::high_resolution_clock::now();
-        std::vector<std::vector<Detection>> results = detector->detect(imgs);
-        auto time_end = std::chrono::high_resolution_clock::now();
-
-        std::cout << "Time spends: " << std::chrono::duration_cast<std::chrono::milliseconds>(time_end - time_start).count() << " ms" << std::endl;
-
-        std::cout << std::endl;
-
         
-        std::cout << results.size() << " results num" << std::endl;
+        SyncScheduler<Detector> scheduler(detector);
+        // AsyncScheduler<Detector> scheduler(detector);
 
-        for (auto& result : results) {
-            std::cout << result.size() << " det size" << std::endl;
-            for (const auto& det : result) {
+        for (int i = 0; i < batch; ++i) {
+            std::future<Detector::OutputType> output = scheduler.submit(img);
+
+            std::vector<Detection> dets = output.get();
+
+            std::cout << "detection nums: " << dets.size() << std::endl;
+
+            for (const auto& det : dets) {
                 std::cout << detector->class_label(det.class_id) << " " << det.score << std::endl;
-                draw_box(img, det, RED);
             }
         }
+
+        
+
+
+        // auto time_start = std::chrono::high_resolution_clock::now();
+        // std::vector<std::vector<Detection>> results = detector->detect(imgs);
+        // auto time_end = std::chrono::high_resolution_clock::now();
+
+        // std::cout << "Time spends: " << std::chrono::duration_cast<std::chrono::milliseconds>(time_end - time_start).count() << " ms" << std::endl;
+
+        // std::cout << std::endl;
+
+        
+        // std::cout << results.size() << " results num" << std::endl;
+
+        // for (auto& result : results) {
+        //     std::cout << result.size() << " det size" << std::endl;
+        //     for (const auto& det : result) {
+        //         std::cout << detector->class_label(det.class_id) << " " << det.score << std::endl;
+        //         draw_box(img, det, RED);
+        //     }
+        // }
 
         std::cout << "inference ending" << std::endl;
 

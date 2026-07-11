@@ -28,7 +28,7 @@ spdlog::level::level_enum ParseLevel(LoggerLevel level) {
     if (level == LOGLEVEL_ERROR)    return spdlog::level::err;
     if (level == LOGLEVEL_CRITICAL) return spdlog::level::critical;
     if (level == LOGLEVEL_TRACE)    return spdlog::level::trace;
-    return spdlog::level::info;
+    return static_cast<spdlog::level::level_enum>(SPDLOG_ACTIVE_LEVEL);
 }
 
 } // anonymous namespace
@@ -61,42 +61,39 @@ std::shared_ptr<spdlog::logger>& GetInstance() {
 }
 
 void Init(LoggerLevel log_level,
-          const std::string& log_file,
-          size_t max_file_size,
-          int max_files) {
-            
+    const std::string& log_file,
+    size_t max_file_size,
+    int max_files) {
+      
     auto& lgr = GetInstance();
+    auto spd_log_level = ParseLevel(log_level);
 
-    // 重建 sinks
     std::vector<spdlog::sink_ptr> sinks;
-    sinks.push_back(std::make_shared<spdlog::sinks::stdout_color_sink_mt>());
+
+    // ✅ 关键修复：必须为每个 sink 单独设置级别
+    auto console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
+    console_sink->set_level(spd_log_level); 
+    sinks.push_back(console_sink);
 
     if (!log_file.empty()) {
-        std::cout << "hhh" << std::endl;
-        try {
-            sinks.push_back(
-                std::make_shared<spdlog::sinks::rotating_file_sink_mt>(
-                    log_file, max_file_size, max_files));
-        } catch (const spdlog::spdlog_ex& ex) {
-            fprintf(stderr, "[Logger] File sink failed: %s\n", ex.what());
-        }
+    try {
+        auto file_sink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(
+            log_file, max_file_size, max_files);
+        file_sink->set_level(spd_log_level); // ✅ 文件 sink 同理
+        sinks.push_back(file_sink);
+    } catch (const spdlog::spdlog_ex& ex) {
+        fprintf(stderr, "[Logger] File sink failed: %s\n", ex.what());
+    }
     }
 
-    // 替换 sinks（spdlog 支持运行时热替换）
     lgr->sinks() = std::move(sinks);
-    lgr->set_level(ParseLevel(log_level));
+    lgr->set_level(spd_log_level);
 
-    lgr->flush_on(spdlog::level::info);
+    // ⚠️ 再次强调：不要对 debug 级别使用 flush_on
+    lgr->flush_on(spdlog::level::warn); 
 
-    // static bool registered = false;
-    // if (!registered) {
-    //     std::atexit([]() {
-    //         spdlog::apply_all([](std::shared_ptr<spdlog::logger> l) {
-    //             l->flush();
-    //         });
-    //     });
-    //     registered = true;
-    // }
+    // ✅ 关键修复：将自定义 logger 设为全局默认
+    spdlog::set_default_logger(lgr);
 }
 
 void SetLevel(LoggerLevel level) {

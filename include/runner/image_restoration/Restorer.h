@@ -9,8 +9,9 @@
 
 class Restorer : public ModelRunner
 {
-private:
-    /* data */
+public:
+    using InputType     = cv::Mat;
+    using OutputType    = cv::Mat;
 public:
     Restorer(const YAML::Node& config);
 

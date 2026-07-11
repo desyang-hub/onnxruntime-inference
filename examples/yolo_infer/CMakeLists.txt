@@ -36,3 +36,12 @@ add_executable(batch_yolo_infer
 target_link_libraries(batch_yolo_infer
     ${INFER_LIB}
 )
+
+add_executable(logger_test
+    logger_test.cpp
+)
+
+target_link_libraries(logger_test
+    PUBLIC
+    logger
+)

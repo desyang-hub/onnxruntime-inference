@@ -106,6 +106,8 @@ endif()
 find_package(OpenMP REQUIRED)
 # 2. 查找 OpenCV 包
 find_package(OpenCV REQUIRED HINTS ${OpenCV_DIR})
+# 3. 添加logger
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/setup_spdlog.cmake)
 
 
 # 编译链接库
@@ -140,7 +142,7 @@ target_include_directories(${INFER_LIB}
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
-include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/setup_spdlog.cmake)
+
 
 target_link_libraries(${INFER_LIB} 
     PUBLIC

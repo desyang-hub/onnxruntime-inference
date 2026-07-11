@@ -1,10 +1,12 @@
 #include "runner/image_restoration/NAFNet.h"
+#include "scheduler/AsyncScheduler.h"
 
 int main(int argc, char const *argv[])
 {
     
     std::string config_path = "config/Restorer.yaml";
-    auto restorer = Restorer::Load<NAFNet>(config_path);
+    // auto restorer = Restorer::Load<NAFNet>(config_path);
+    std::shared_ptr<Restorer> restorer = std::make_shared<NAFNet>(YAML::LoadFile(config_path));
 
     std::string img_path = "assets/seal.png";
 

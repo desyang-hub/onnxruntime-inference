@@ -21,8 +21,8 @@ target_link_libraries(logger_core PUBLIC spdlog::spdlog)
 target_compile_definitions(logger_core PUBLIC
     # SPDLOG_FMT_EXTERNAL=0
     # LOG_LEVEL_DEFAULT=2
-    $<$<CONFIG:Debug>:LOG_LEVEL_DEFAULT=1>    # Debug 保留 debug
-    $<$<CONFIG:Release>:LOG_LEVEL_DEFAULT=2>  # Release 从 info 开始
+    $<$<CONFIG:Debug>:SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_TRACE>   # 此处只用于宏设置，设置日志的最高级别，低于该级别的即使开启，也不会打印
+    $<$<NOT:$<CONFIG:Debug>>:SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_INFO>
 )
 
 # 3. INTERFACE 包装层

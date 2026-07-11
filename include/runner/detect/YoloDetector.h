@@ -16,6 +16,8 @@
 
 class YoloDetector : public Detector
 {
+public:
+    using ModelRunner::infer;
 private:
     YAML::Node config_;
     // model
@@ -51,12 +53,15 @@ private:
 
 public:
     explicit YoloDetector(const YAML::Node& config);
-    ~YoloDetector() = default;
 
-    TensorBuffer preprocess(const cv::Mat& img);
-    void preprocess(const std::vector<cv::Mat>& imgs);
+    virtual TensorBuffer preprocess(const cv::Mat&) override;
+    virtual ModelOutput infer(const TensorBuffer&) override;
+    virtual std::vector<Detection> postprocess(const ModelOutput&) override;
+
+    // TensorBuffer preprocess(const cv::Mat& img);
+    TensorBuffer preprocess(const std::vector<cv::Mat>& imgs);
     
-    std::vector<Detection> postprocess(const TensorBuffer&);
+    // std::vector<Detection> postprocess(const TensorBuffer&);
     std::vector<std::vector<Detection>> postprocess(const TensorBuffer&, size_t batch);
 
     const std::string& class_label(size_t id) const;
