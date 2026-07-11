@@ -13,7 +13,7 @@ public:
 
     }
 
-    void submit(Task f) override {
+    void submit(Task&& f) override {
         thread_pool_.enqueue(std::move(f));
     }
 };

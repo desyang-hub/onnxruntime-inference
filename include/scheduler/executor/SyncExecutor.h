@@ -64,7 +64,7 @@ public:
     }
 
     // 阻塞进行
-    void submit(Task f) override {
+    void submit(Task&& f) override {
         {
             std::lock_guard<std::mutex> lock(que_mutex_);
             if (is_close) {
