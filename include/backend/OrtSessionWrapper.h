@@ -30,6 +30,7 @@ OrtLoggingLevel ParseLogSeverityLevel(const std::string &level);
 
 std::vector<int64_t> parse_input_meta(const std::vector<int64_t> &shape, const std::vector<int64_t> &img_shape);
 
+/// @brief OnnxRuntime 推理器
 class OrtSessionWrapper : public InferenceBackend
 {
     enum ShapeId
@@ -42,7 +43,6 @@ class OrtSessionWrapper : public InferenceBackend
 
 private:
     Ort::Env env_; // Ort推理环境
-    // Ort::Session session_;
     std::unique_ptr<Ort::Session> session_;
 
     std::vector<std::string> input_names_;
@@ -57,7 +57,7 @@ private:
     float *pdata_;
 
     Ort::MemoryInfo active_mem_info_{nullptr};
-    static constexpr size_t kGPUId = 0; // 使用gpu的设备编号
+    int kGPUId = -1; // 使用gpu的设备编号
 
 public:
     // gpu环境下返回GPU数据指针
@@ -68,7 +68,6 @@ public:
 
     explicit OrtSessionWrapper(const YAML::Node &config) : env_(ORT_LOGGING_LEVEL_ERROR, "OrtSessionWrapper")
     {
-
         std::string model_path = config["path"].as<std::string>();
         // Ort::SessionOptions 配置
         Ort::SessionOptions session_options;
@@ -102,6 +101,7 @@ public:
             config["shape"]
                 .as<std::vector<int64_t>>(std::vector<int64_t>{640, 640});
         size_t batch = config["batch"].as<size_t>(1);
+        kGPUId = config["gpu"].as<int>(-1);
 
         // 设置sessionOptions
         session_options.SetGraphOptimizationLevel(ParseGraphOptimizationLevel(graph_optimization_level));
@@ -291,7 +291,7 @@ public:
                 // Ort::Allocator allocator(*session_, mem_info);
                 // Ort::Allocator 提供了 GetInfo() 方法,包含了该分配器绑定的设备类型、设备ID、内存类型和分配策略。
 
-                setactivateGPUId(candidate.device_id);
+                setActivateGPUId(candidate.device_id);
                 enableGPUActivate();
                 LOG_INFO("[Device] ✅ Active EP: {}, logical device {}", candidate.name, activateGPUId());
                 return; // 找到最高优先级的可用设备，立即返回
@@ -341,20 +341,18 @@ public:
         }
     }
 
-    ModelOutput run() override
-    {
-        static constexpr size_t kInputCount = 1; // 这个是输入节点的数量，不是batch，多模态模型才会有多输入
+    // 推理无需数据，因为推理过程使用的是推理器的缓存好的空间，只需要将数据拷贝到这里即可，而这由基类完成
+    ModelOutput infer() override {
 
-        auto &tensor_buffer = tensorBuffer();
-        if (!tensor_buffer.valid())
-        {
-            throw std::runtime_error("Data not valid");
+        auto& tensor_buffer = tensorBuffer();
+
+        if (isGPUActivate()) {
+#ifdef ENABLE_CUDA
+            // 使用异步stream进行数据拷贝时，使用内存屏障来保证GPU数据同步
+            cudaDeviceSynchronize();
+#endif
         }
 
-#ifdef ENABLE_CUDA
-        // 使用异步stream进行数据拷贝时，使用内存屏障来保证GPU数据同步
-        cudaDeviceSynchronize();
-#endif
 
         // 进行推理
         // TIMER_START_TAG(Run)

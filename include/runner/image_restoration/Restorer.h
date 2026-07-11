@@ -11,15 +11,18 @@ class Restorer : public ModelRunner
 {
 public:
     using InputType     = cv::Mat;
-    using OutputType    = cv::Mat;
+    using OutputType    = std::vector<cv::Mat>;
 public:
     Restorer(const YAML::Node& config);
 
     template<class T>
     static std::unique_ptr<Restorer> Load(const std::string& config_path);
 
-    virtual std::vector<cv::Mat> restoration(const std::vector<cv::Mat>& imgs) = 0;
-    virtual cv::Mat restoration(const cv::Mat& img) = 0;
+    virtual TensorBuffer preprocess(const cv::Mat&) = 0;
+    virtual std::vector<cv::Mat> postprocess(const ModelOutput&) = 0;
+
+    cv::Mat restoration(const cv::Mat& img);
+    // std::vector<cv::Mat> restoration(const std::vector<cv::Mat>& imgs);
 };
 
 template<class T>

@@ -4,6 +4,7 @@ model:
   backend: "onnxruntime"
   shape: [640, 640] # h, w
   batch: 4 # 推理过程中缓存的batch
+  gpu: 1
   session_options:
     execution_providers: ["TensorrtExecutionProvider", CUDAExecutionProvider] # 不填默认为CPUExecutionProvider
     graph_optimization_level: "ORT_ENABLE_ALL"

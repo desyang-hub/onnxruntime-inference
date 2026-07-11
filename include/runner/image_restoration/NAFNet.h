@@ -27,10 +27,10 @@ private:
 public:
     NAFNet(const YAML::Node& config);
 
-    std::vector<cv::Mat> restoration(const std::vector<cv::Mat>& imgs) override;
-    cv::Mat restoration(const cv::Mat& img) override;
+    TensorBuffer preprocess(const cv::Mat&) override;
+    std::vector<cv::Mat> postprocess(const ModelOutput&) override;
 
-    void preprocess(const std::vector<cv::Mat>& imgs);
+    TensorBuffer preprocess(const std::vector<cv::Mat>& imgs);
 
     std::vector<cv::Mat> postprocess(const TensorBuffer& tensor_buf, size_t batch);
 };

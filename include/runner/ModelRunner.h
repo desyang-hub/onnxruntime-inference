@@ -23,11 +23,12 @@ int ParseBackendTypeFromString(const std::string& backend);
 
 class ModelRunner
 {
-public:
-    std::unique_ptr<InferenceBackend> backend_;
 protected:
+    std::unique_ptr<InferenceBackend> backend_;
+
+public:
     explicit ModelRunner(const YAML::Node& config);
     virtual ~ModelRunner() = default;
     
-    ModelOutput infer();
+    ModelOutput infer(const TensorBuffer&);
 };

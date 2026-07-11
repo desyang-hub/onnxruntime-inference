@@ -37,36 +37,12 @@ private:
 
     std::vector<std::string> labels_;
 
-#ifdef ENABLE_CUDA
-    struct cuda_stream_deleter {
-        void operator()(cudaStream_t stream) {
-            if (stream) {
-                cudaStreamSynchronize(stream); 
-                cudaStreamDestroy(stream);
-            }
-        }
-    };
-    using CudaStreamPtr = std::unique_ptr<CUstream_st, cuda_stream_deleter>;
-
-    std::vector<CudaStreamPtr> streams_;
-#endif
-
 public:
     explicit YoloDetector(const YAML::Node& config);
 
     virtual TensorBuffer preprocess(const cv::Mat&) override;
-    virtual ModelOutput infer(const TensorBuffer&) override;
-    virtual std::vector<Detection> postprocess(const ModelOutput&) override;
+    virtual std::vector<std::vector<Detection>> postprocess(const ModelOutput&) override;
 
     // TensorBuffer preprocess(const cv::Mat& img);
-    TensorBuffer preprocess(const std::vector<cv::Mat>& imgs);
-    
-    // std::vector<Detection> postprocess(const TensorBuffer&);
-    std::vector<std::vector<Detection>> postprocess(const TensorBuffer&, size_t batch);
-
-    const std::string& class_label(size_t id) const;
-
-
-    std::vector<Detection> detect(const cv::Mat& img) override;
-    std::vector<std::vector<Detection>> detect(const std::vector<cv::Mat>& imgs) override;
+    // TensorBuffer preprocess(const std::vector<cv::Mat>& imgs);
 };

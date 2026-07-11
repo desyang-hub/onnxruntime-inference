@@ -45,25 +45,25 @@ public:
     /// @return 
     std::future<OutputType> submit(const InputType& input) override {
         auto p = std::make_shared<std::promise<OutputType>>();
-        std::future<OutputType> fut = p.get_future();
+        std::future<OutputType> fut = p->get_future();
 
-        std::packaged_task<void()> task([this,  p, input]() mutable {
+        pre_executor_->submit([this,  p, input]() mutable {
             TensorBuffer tenbuf = pre_stage_->execute(input);
             // 异步提交直接结束
-            std::packaged_task<void()> task([this, p, tenbuf = std::move(tenbuf)]() mutable {
+            infer_executor_->submit([this, p, tenbuf = std::move(tenbuf)]() mutable {
                 // 最后一个阶段任务
                 ModelOutput model_out = infer_stage_->execute(tenbuf);
-                std::packaged_task<void()> task([this, p, model_out = std::move(model_out)]() mutable {
+                post_executor_->submit([this, p, model_out = std::move(model_out)]() mutable {
                     OutputType out = post_stage_->execute(model_out);
                     p->set_value(std::move(out));
                 });
-                post_executor_->submit(std::move(task));
+                // post_executor_->submit(std::move(task));
             });
-            infer_executor_->submit(std::move(task));
+            // infer_executor_->submit(std::move(task));
         });
 
         // 提交任务
-        pre_executor_->submit(std::move(task));
+        // pre_executor_->submit(std::move(task));
 
         return fut;
     }

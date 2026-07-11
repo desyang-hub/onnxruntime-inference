@@ -22,6 +22,6 @@ ModelRunner::ModelRunner(const YAML::Node& config) {
     }
 }
 
-ModelOutput ModelRunner::infer() {
-    return backend_->run();
+ModelOutput ModelRunner::infer(const TensorBuffer& tb) {
+    return backend_->run(tb);
 }

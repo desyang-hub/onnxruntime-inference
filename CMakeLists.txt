@@ -121,6 +121,7 @@ add_library(${INFER_LIB} ""
     src/runner/detect/Detector.cpp
     src/runner/image_restoration/Restorer.cpp
     src/runner/image_restoration/NAFNet.cpp
+    src/scheduler/stage/Stage.cpp
 )
 
 if(ENABLE_CUDA)

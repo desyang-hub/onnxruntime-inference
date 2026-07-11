@@ -28,7 +28,7 @@ class Detector : public ModelRunner
 {
 public:
     using InputType = cv::Mat;
-    using OutputType = std::vector<Detection>;
+    using OutputType = std::vector<std::vector<Detection>>;
 private:
     std::vector<std::string> labels_;
 public:
@@ -38,11 +38,9 @@ public:
     static std::unique_ptr<Detector> Load(const std::string& cfg);
 
     virtual TensorBuffer preprocess(const InputType&) = 0;
-    virtual ModelOutput infer(const TensorBuffer&) = 0;
-    virtual OutputType postprocess(const ModelOutput&) = 0;
+    virtual std::vector<std::vector<Detection>> postprocess(const ModelOutput&) = 0;
 
-    virtual std::vector<Detection> detect(const cv::Mat& img) = 0;
-    virtual std::vector<std::vector<Detection>> detect(const std::vector<cv::Mat>& imgs) = 0;
+    std::vector<Detection> detect(const cv::Mat& img);
 
     const std::string& class_label(size_t id) const;
 };

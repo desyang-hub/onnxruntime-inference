@@ -16,6 +16,7 @@
 #include <stdexcept>
 
 #include "TensorBuffer.h"
+#include "device/cuda_utils.h"
 
 /// @brief 后端无关的模型输出容器
 /// 无论底层是 ORT/TRT/RKNN，对外都呈现为命名张量集合
@@ -50,12 +51,22 @@ private:
     int active_gpu_id_ = -1;
 
     void init();
+    void memCpyHostToDevice(const TensorBuffer&);
+
+#ifdef ENABLE_CUDA
+    std::vector<CudaStreamPtr> streams_;
+    bool is_custream_init_ = false;
+#endif
 
 public:
     InferenceBackend() = default;
     virtual ~InferenceBackend() = default;
     virtual const std::vector<int64_t>& shapes() const = 0;
-    virtual ModelOutput run() = 0;
+    ModelOutput run(const TensorBuffer&);
+
+    virtual ModelOutput infer() = 0;
+
+
 
     TensorBuffer& tensorBuffer() {
         if (!is_init_)
@@ -81,14 +92,14 @@ public:
         return active_gpu_id_;
     }
 
-    void setactivateGPUId(int gpu_id) {
+    void setActivateGPUId(int gpu_id) {
         active_gpu_id_ = gpu_id;
     }
 
     // warm_up 中包含了初始化，不论cnt是否为0，都必须调用
     void warm_up(size_t cnt);
 
-    /// @brief 用于返回后端推理引擎返回的缓存数据指针
+    /// @brief 返回推理设备的缓存指针，比如GPU内存数据指针
     /// @return 
     virtual float* data() = 0;
 };
