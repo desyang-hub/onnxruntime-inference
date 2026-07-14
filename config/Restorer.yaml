@@ -4,10 +4,11 @@ model:
   backend: "onnxruntime"
   padder_size: 16 # 暂时没用上
   shape: [576, 576] # h, w 目前要求所有图像size小于该尺寸才可以触发全局缓存，后续可以添加缓存桶，一次提供多个常用的shape，让图像自动padding到最适合的桶进行推理，保证高效
-  batch: 4 # 推理过程中缓存的batch
+  batch: 1 # 推理过程中缓存的batch
   gpu: 1
   session_options:
-    execution_providers: ["TensorrtExecutionProvider", CUDAExecutionProvider]
+    trt_fp16_enable: "0" # ["0", "1"] 当且仅当TensorrtExecutionProvider有效时可用，默认fp32推理
+    execution_providers: ["TensorrtExecutionProvider", "CUDAExecutionProvider"]
     graph_optimization_level: "ORT_ENABLE_ALL"
     intra_op_num_threads: 4
     inter_op_num_threads: 1

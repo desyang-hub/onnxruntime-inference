@@ -9,6 +9,8 @@
 
 using namespace std;
 
+std::atomic_bool is_running = true;
+
 void display(SPSCQueue<cv::Mat>& imgs) {
     auto time_start = std::chrono::high_resolution_clock::now();
     size_t size = 0;
@@ -16,6 +18,9 @@ void display(SPSCQueue<cv::Mat>& imgs) {
         cv::Mat img;
         bool success = imgs.pop(img);
         if (success) ++size;
+        else {
+            if (!is_running.load()) break;
+        }
 
         auto time_end = std::chrono::high_resolution_clock::now();
         size_t spend = std::chrono::duration_cast<std::chrono::milliseconds>(time_end - time_start).count();
@@ -31,7 +36,7 @@ void display(SPSCQueue<cv::Mat>& imgs) {
 int main(int argc, char const *argv[])
 {
     
-    const std::string& video_path = "assets/video.mp4";
+    const std::string& video_path = "assets/vedio.mp4";
 
     cv::VideoCapture cap(video_path);
     if (!cap.isOpened()) {
@@ -52,7 +57,10 @@ int main(int argc, char const *argv[])
     cv::Mat frame;
     while (true) {
         cap >> frame;
-        if (frame.empty()) break;
+        if (frame.empty()) {
+            is_running.store(false);
+            break;
+        } 
         
         // TIMER_START();
         std::vector<Detection> dets = detector->detect(frame);

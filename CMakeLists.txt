@@ -13,6 +13,8 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/lib)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/lib)
 
+set(CMAKE_INCLUDE_CURRENT_DIR ON)
+
 option(BUILD_EXAMPLES "Build examples" ON)
 message(STATUS "Build examples: ${BUILD_EXAMPLES}")
 option(ENABLE_CUDA "Link against onnxruntime-gpu and enable CUDA provider" OFF)
@@ -35,6 +37,7 @@ include(cmake/CPM.cmake)
 # ONNX Runtime 1.18.0 Linux x64 CPU 预编译包
 if(ENABLE_CUDA)
     set(ONNXRUNTIME_VERSION 1.25.0)
+    enable_language(CUDA)
 else()
     set(ONNXRUNTIME_VERSION 1.18.0)
 endif()
@@ -109,10 +112,7 @@ find_package(OpenCV REQUIRED HINTS ${OpenCV_DIR})
 # 3. 添加logger
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/setup_spdlog.cmake)
 
-
-# 编译链接库
-set(INFER_LIB onnx_infer)
-add_library(${INFER_LIB} ""
+set(project_sources
     src/backend/InferenceBackend.cpp
     src/backend/OrtSessionWrapper.cpp
     src/preprocess/utils.cpp
@@ -125,6 +125,23 @@ add_library(${INFER_LIB} ""
 )
 
 if(ENABLE_CUDA)
+    set(project_device_sources 
+        src/device/gpu_preprocess.cu
+    )
+else()
+    set(project_device_sources 
+        ""
+    )
+endif()
+
+# 编译链接库
+set(INFER_LIB onnx_infer)
+add_library(${INFER_LIB} ""
+    ${project_sources}
+    ${project_device_sources}
+)
+
+if(ENABLE_CUDA)
     find_package(CUDAToolkit REQUIRED)
 
     target_compile_definitions(${INFER_LIB}
@@ -134,6 +151,18 @@ if(ENABLE_CUDA)
     target_link_libraries(${INFER_LIB} 
         PUBLIC
         CUDA::cudart
+    )
+
+    # ⭐ 找到定义 YoloDetector 的库目标（根据你的项目结构，名字可能是 onnx_infer）
+    #    把 .cu 加到这个库上，而不是加到 yolo_infer 可执行文件上
+    target_sources(${INFER_LIB} PRIVATE 
+        ${project_device_sources}
+    )
+
+    # ⭐ 路径必须与 target_sources 中完全一致！
+    set_source_files_properties(
+        ${project_device_sources}
+        PROPERTIES LANGUAGE CUDA
     )
 endif()
 

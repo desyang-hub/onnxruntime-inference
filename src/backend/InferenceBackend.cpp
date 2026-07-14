@@ -21,35 +21,36 @@ void InferenceBackend::memCpyHostToDevice(const TensorBuffer& tenbuf) {
     // 将预处理参数传递到全局TensorBuffer中，便于后续后处理通过参数还原
     tensorBuffer().letterbox_params = tenbuf.letterbox_params;
     size_t batch = tenbuf.letterbox_params.size();
-    if (isGPUActivate()) {
+    
+    if (data() != tenbuf.data) {
+        if (isGPUActivate()) {
 #ifdef ENABLE_CUDA
-        // 初始化cuda流
-        if (!is_custream_init_) {
-            is_custream_init_ = true;
-            int64_t batch = shapes()[0];
-            streams_.reserve(batch);
-            for (int i = 0; i < batch; ++i) {
-                cudaStream_t stream{};
-                cudaStreamCreate(&stream);
-                streams_.emplace_back(stream);
+            // 初始化cuda流
+            if (!is_custream_init_) {
+                is_custream_init_ = true;
+                int64_t batch = shapes()[0];
+                streams_.reserve(batch);
+                for (int i = 0; i < batch; ++i) {
+                    cudaStream_t stream{};
+                    cudaStreamCreate(&stream);
+                    streams_.emplace_back(stream);
+                }
             }
-        }
-        
-        // 将数据从CPU异步移动到GPU
-        int64_t plane_size = tenbuf.plane_size();
-        for (int i = 0; i < batch; ++i) {
-            cudaMemcpyAsync(
-                data() + i * plane_size,
-                tenbuf.data + i * plane_size,
-                plane_size * sizeof(float),
-                cudaMemcpyHostToDevice,
-                streams_[i].get()
-            );
-        }
+            
+            // 将数据从CPU异步移动到GPU
+            int64_t plane_size = tenbuf.plane_size();
+            for (int i = 0; i < batch; ++i) {
+                cudaMemcpyAsync(
+                    data() + i * plane_size,
+                    tenbuf.data + i * plane_size,
+                    plane_size * sizeof(float),
+                    cudaMemcpyHostToDevice,
+                    streams_[i].get()
+                );
+            }
 #endif
-    } 
-    else {
-        if (tenbuf.data != data()) {
+        } 
+        else {
             std::memcpy(data(), tenbuf.data, tenbuf.byte_size());
         }
     }

@@ -37,6 +37,12 @@ private:
 
     std::vector<std::string> labels_;
 
+#ifdef ENABLE_CUDA
+    // uint8_t* d_input_bgr_ = nullptr;
+    std::shared_ptr<uint8_t> d_input_bgr_{};
+    CudaStreamPtr cuStream_;
+#endif
+    
 public:
     explicit YoloDetector(const YAML::Node& config);
 

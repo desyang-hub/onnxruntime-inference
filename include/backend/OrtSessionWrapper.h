@@ -14,6 +14,7 @@
 #include <stdexcept>
 #include <yaml-cpp/yaml.h>
 #include <onnxruntime_cxx_api.h>
+#include <onnxruntime_c_api.h>
 #include <unordered_map>
 
 #include "Timer.h"
@@ -125,24 +126,6 @@ public:
             optimized_model_path = new_path.string();
         }
 
-        if (!fs::exists(optimized_model_path))
-        {
-            session_options.SetOptimizedModelFilePath(STRING_TO_WSTRING(optimized_model_path).c_str());
-        }
-
-        // TensorRT开启会异常，优化算子会推理异常
-        auto set_optimized_model_path = [&optimized_model_path, &model_path]
-        {
-            // 如果优化模型路径能够被加载，直接加载优化路径
-            if (fs::exists(optimized_model_path))
-            {
-                model_path = optimized_model_path;
-            }
-            else if (!fs::exists(model_path))
-            {
-                throw std::runtime_error("Model not found: " + model_path);
-            }
-        };
 
         // 获取环境中可用的推理设备
         // auto execute_providers = Ort::GetAvailableProviders();
@@ -153,37 +136,111 @@ public:
         //     std::cout << execute_providers[i] << std::endl;
         // }
 
+        bool isTensorRTAvailable = false;
+
 #ifdef ENABLE_CUDA
         static constexpr unsigned long long kMaxGPUMemLimit = 4; // 限制4GB显存空间
 
         // 1. 尝试 TensorRT
-        const std::string &tensorrt_provider = "TensorrtExecutionProvider";
-        bool isTensorRTAvailable = std::find(execute_providers.begin(),
-                                             execute_providers.end(),
-                                             tensorrt_provider) != execute_providers.end();
+        // const std::string &tensorrt_provider = "TensorrtExecutionProvider";
+        // isTensorRTAvailable = std::find(execute_providers.begin(),
+        //                                      execute_providers.end(),
+        //                                      tensorrt_provider) != execute_providers.end();
 
+        // if (isTensorRTAvailable)
+        // {
+        //     try
+        //     {
+        //         OrtTensorRTProviderOptions trt_opts{};
+        //         trt_opts.device_id = kGPUId;
+        //         trt_opts.trt_max_workspace_size = kMaxGPUMemLimit * 1024 * 1024 * 1024;
+        //         trt_opts.trt_engine_cache_enable = 1;
+        //         trt_opts.trt_engine_cache_path = "./trt_cache"; // 关键：指定缓存目录
+        //         session_options.AppendExecutionProvider_TensorRT(trt_opts);
+        //         LOG_INFO("[EP] TensorRT registered");
+        //     }
+        //     catch (const std::exception &e)
+        //     {
+        //         LOG_WARN("[EP] TensorRT unavailable: {}", e.what());
+        //         isTensorRTAvailable = false;
+        //     }
+        // }
+
+
+        const std::string &tensorrt_provider = "TensorrtExecutionProvider";
+        isTensorRTAvailable = std::find(execute_providers.begin(),
+                                        execute_providers.end(),
+                                        tensorrt_provider) != execute_providers.end();
+
+        // 使用V2 api开启TensorRt
         if (isTensorRTAvailable)
         {
             try
             {
-                OrtTensorRTProviderOptions trt_opts{};
-                trt_opts.device_id = kGPUId;
-                trt_opts.trt_max_workspace_size = kMaxGPUMemLimit * 1024 * 1024 * 1024;
-                trt_opts.trt_engine_cache_enable = 1;
-                trt_opts.trt_engine_cache_path = "./trt_cache"; // 关键：指定缓存目录
-                session_options.AppendExecutionProvider_TensorRT(trt_opts);
-                LOG_INFO("[EP] TensorRT registered");
+                // 1. 获取全局 C API 指针（所有版本都有这个函数）
+                const OrtApi* ort_api = OrtGetApiBase()->GetApi(ORT_API_VERSION);
+                if (!ort_api) {
+                    throw std::runtime_error("Failed to get ONNX Runtime C API");
+                }
+        
+                // 2. 创建 V2 Options
+                OrtTensorRTProviderOptionsV2* trt_opts = nullptr;
+                OrtStatus* status = ort_api->CreateTensorRTProviderOptions(&trt_opts);
+                if (status != nullptr) {
+                    std::string err = ort_api->GetErrorMessage(status);
+                    ort_api->ReleaseStatus(status);
+                    throw std::runtime_error("CreateTensorRTProviderOptions failed: " + err);
+                }
+        
+                // 3. 配置参数
+                std::string workspace_size = std::to_string(kMaxGPUMemLimit * 1024ULL * 1024ULL * 1024ULL);
+                std::string device_id_str  = std::to_string(kGPUId);
+        
+                const char* keys[] = {
+                    "device_id",
+                    "trt_max_workspace_size",
+                    "trt_fp16_enable",
+                    "trt_engine_cache_enable",
+                    "trt_engine_cache_path"
+                };
+
+                std::string FP16_enable = config["session_options"]["trt_fp16_enable"].as<std::string>("0");
+
+                const char* values[] = {
+                    device_id_str.c_str(),
+                    workspace_size.c_str(),
+                    FP16_enable.c_str(),   // FP16 ON["1"], OFF["0"]
+                    "1",   // Cache ON
+                    "./trt_cache"
+                };
+        
+                status = ort_api->UpdateTensorRTProviderOptions(
+                    trt_opts, keys, values, sizeof(keys) / sizeof(keys[0]));
+                if (status != nullptr) {
+                    std::string err = ort_api->GetErrorMessage(status);
+                    ort_api->ReleaseStatus(status);
+                    ort_api->ReleaseTensorRTProviderOptions(trt_opts);
+                    throw std::runtime_error("UpdateTensorRTProviderOptions failed: " + err);
+                }
+        
+                // 4. 挂载到 C++ SessionOptions（C/C++ 混合调用关键步骤）
+                session_options.AppendExecutionProvider_TensorRT_V2(*trt_opts);
+        
+                // 5. 释放 V2 Options
+                ort_api->ReleaseTensorRTProviderOptions(trt_opts);
+                
+                if (FP16_enable == "1")
+                    LOG_INFO("[EP] TensorRT registered (FP16 enabled via C API)");
+                else
+                    LOG_INFO("[EP] TensorRT registered (FP32 enabled via C API)");
             }
             catch (const std::exception &e)
             {
                 LOG_WARN("[EP] TensorRT unavailable: {}", e.what());
-                set_optimized_model_path();
+                isTensorRTAvailable = false;
             }
         }
-        else
-        {
-            set_optimized_model_path();
-        }
+
 
         // 添加CUDA设备
         const std::string &cuda_provider = "CUDAExecutionProvider";
@@ -212,8 +269,29 @@ public:
         }
 #endif
 
+        // TensorRT开启会异常，优化算子会推理异常
+        if (!isTensorRTAvailable) {
+            // 优化路径不存在则进行模型生成
+            if (!fs::exists(optimized_model_path))
+            {
+                // 这个过程不能发生在TensorRT推理，否则会发生异常
+                session_options.SetOptimizedModelFilePath(STRING_TO_WSTRING(optimized_model_path).c_str());
+            }
+
+            // 如果优化模型路径能够被加载，直接加载优化路径
+            if (fs::exists(optimized_model_path))
+            {
+                model_path = optimized_model_path;
+            }
+            else if (!fs::exists(model_path))
+            {
+                throw std::runtime_error("Model not found: " + model_path);
+            }
+        }
+
         try
         { // OrtSession 初始化
+            LOG_INFO("Model load path: {}", model_path);
             session_ = std::make_unique<Ort::Session>(env_, MODEL_PATH(model_path).c_str(), session_options);
         }
         catch (const std::exception &e)
@@ -346,16 +424,14 @@ public:
 
         auto& tensor_buffer = tensorBuffer();
 
-        if (isGPUActivate()) {
 #ifdef ENABLE_CUDA
+        if (isGPUActivate()) {
             // 使用异步stream进行数据拷贝时，使用内存屏障来保证GPU数据同步
             cudaDeviceSynchronize();
-#endif
         }
-
+#endif
 
         // 进行推理
-        // TIMER_START_TAG(Run)
         auto timer = ScopedTimer("InferTimer");
         std::vector<Ort::Value> ort_outputs = session_->Run(
             Ort::RunOptions{},
@@ -364,7 +440,6 @@ public:
             input_names_c_str_.size(), // 单个节点
             output_names_c_str_.data(),
             output_names_c_str_.size());
-        // TIMER_FINISH_TAG(Run);
         LOG_DEBUG("Model infer run spends: {} ms", timer.elapsed_ms());
 
         // ========== 3. Ort::Value → TensorBuffer ==========
@@ -384,8 +459,7 @@ public:
             // 创建生命周期守卫，防止 Ort::Value 提前析构
             auto guard = std::shared_ptr<Ort::Value>(
                 new Ort::Value(std::move(val)),
-                [](Ort::Value *p)
-                { delete p; });
+                [](Ort::Value *p){ delete p; }); // deleter
 
             result.tensors[output_names_[i]] = TensorBuffer::wrap(
                 data_ptr, shape,

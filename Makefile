@@ -1,6 +1,6 @@
 cmake_build_type ?= Debug
 cmake_build_dir   = build
-with_cuda = ON # OFF # ON
+with_cuda ?= ON # OFF # ON
 
 .PHONY: all clean release debug
 

@@ -1,12 +1,13 @@
 #include <chrono>
 #include <string>
 #include <functional>
+#include "logger/logger.h"
 
 // 如果你的项目有自定义日志宏，替换下面的 LOG_TRACE 即可
-#ifndef LOG_TRACE
-#include <cstdio>
-#define LOG_TRACE(fmt, ...) std::printf("[TRACE] " fmt "\n", ##__VA_ARGS__)
-#endif
+// #ifndef LOG_TRACE
+// #include <cstdio>
+// #define LOG_TRACE(fmt, ...) std::printf("[TRACE] " fmt "\n", ##__VA_ARGS__)
+// #endif
 
 class ScopedTimer {
 public:
@@ -26,7 +27,7 @@ public:
     ~ScopedTimer() {
         auto end = std::chrono::steady_clock::now();
         double ms = std::chrono::duration<double, std::milli>(end - m_start).count();
-        LOG_TRACE("%s | elapsed=%.3f ms", m_name.c_str(), ms);
+        LOG_TRACE("{} | elapsed={} ms", m_name.c_str(), ms);
     }
 
     // 可选：手动获取当前已消耗的时间（用于中间检查点）

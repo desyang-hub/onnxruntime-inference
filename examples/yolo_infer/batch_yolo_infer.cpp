@@ -43,6 +43,8 @@ int main(int argc, char const *argv[])
 
         cv::Mat img = cv::imread(img_path);
 
+        detector->detect(img);
+
         for (int i = 0; i < batch; ++i) {
             imgs.push_back(img.clone());
         }

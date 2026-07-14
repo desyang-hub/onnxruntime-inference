@@ -94,6 +94,9 @@ public:
 
     void setActivateGPUId(int gpu_id) {
         active_gpu_id_ = gpu_id;
+#ifdef ENABLE_CUDA
+        cudaSetDevice(gpu_id);
+#endif
     }
 
     // warm_up 中包含了初始化，不论cnt是否为0，都必须调用

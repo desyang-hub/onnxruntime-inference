@@ -16,6 +16,7 @@
 #include "preprocess/utils.h"
 #include "backend/OrtSessionWrapper.h"
 #include "logger/logger.h"
+#include "device/gpu_preprocess.h"
 
 YoloDetector::YoloDetector(const YAML::Node& config) : Detector(config["model"]), config_(config) 
 {
@@ -29,13 +30,77 @@ YoloDetector::YoloDetector(const YAML::Node& config) : Detector(config["model"])
     conf_threshold_     = config_["postprocess"]["conf_threshold"].as<float>(0.25);
     nms_threshold_      = config_["postprocess"]["nms_threshold"].as<float>(0.45);
     max_detections_     = config_["postprocess"]["max_detections"].as<size_t>(300);
+
+#ifdef ENABLE_CUDA
+    int max_pixels = backend_->tensorBuffer().plane_size();
+    uint8_t* input_bgr = nullptr;
+    cudaMalloc(&input_bgr, max_pixels * sizeof(float));       // 原始图 H2D 暂存
+
+    d_input_bgr_ = std::shared_ptr<uint8_t>(input_bgr, [](uint8_t* input_bgr){
+        cudaFree(input_bgr);
+    });
+
+    cudaStream_t stream{};
+    cudaStreamCreate(&stream);
+    cuStream_.reset(stream);
+#endif
 }
 
-/// @brief yolo目标检测预处理模块
+/// @brief yolo目标检测预处理模块, 在CPU上进行预处理
 /// @param img 输入图像
 /// @return 预处理结果
 TensorBuffer YoloDetector::preprocess(const cv::Mat& img) 
 {
+#ifdef ENABLE_CUDA
+
+    auto& s = backend_->shapes();
+    int dst_h = s[2], dst_w = s[3];
+
+    // CPU 端计算 letterbox 参数（纯数学，几乎零耗时）
+    float x_factor = static_cast<float>(dst_w) / img.cols;
+    float y_factor = static_cast<float>(dst_h) / img.rows;
+    float scale = std::min(x_factor, y_factor);
+    constexpr int stride = 32;
+    int new_w = static_cast<int>(std::round(img.cols * scale));
+    int new_h = static_cast<int>(std::round(img.rows * scale));
+
+    new_w -= (new_w % stride);
+    new_h -= (new_h % stride);
+
+    scale = std::min(static_cast<float>(new_w) / img.cols,
+                    static_cast<float>(new_h) / img.rows);
+    new_w = static_cast<int>(std::round(img.cols * scale));
+    new_h = static_cast<int>(std::round(img.rows * scale));
+
+    int pad_left = (dst_w - new_w) / 2;
+    int pad_top  = (dst_h - new_h) / 2;
+
+    float* data = backend_->data();
+
+    // H2D 拷贝原始图（不做任何CPU预处理）
+    cudaMemcpyAsync(d_input_bgr_.get(), img.data,
+                    img.rows * img.step,
+                    cudaMemcpyHostToDevice, cuStream_.get());
+
+    // ⭐ 一个 kernel 搞定 resize + pad + bgr2rgb + norm + transpose
+    gpu_yolo_preprocess(
+        d_input_bgr_.get(), data,
+        img.cols, img.rows, img.step, //img.cols * 3,
+        dst_w, dst_h,
+        scale, pad_left, pad_top,
+        norm_scale_, pad_color_[0],
+        cuStream_.get());
+
+    cudaStreamSynchronize(cuStream_.get());
+
+    TensorBuffer& buf = backend_->tensorBuffer();
+    buf.data = data;
+    buf.letterbox_params[0] = {scale, pad_left, pad_top, img.cols, img.rows};
+
+    return buf;
+
+#else
+
     cv::Mat resized;
 
     const auto& shapes = backend_->shapes();
@@ -49,6 +114,8 @@ TensorBuffer YoloDetector::preprocess(const cv::Mat& img)
     convert_and_normalize(resized, buf.data, size, norm_scale_, bgr2rgb_);
 
     return buf;
+
+#endif
 }
 
 std::vector<std::vector<Detection>> YoloDetector::postprocess(const ModelOutput& model_out) 
