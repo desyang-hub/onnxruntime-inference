@@ -50,12 +50,19 @@ private:
     bool is_gpu_active_ = false;
     int active_gpu_id_ = -1;
 
-    void init();
     void memCpyHostToDevice(const TensorBuffer&);
 
 #ifdef ENABLE_CUDA
     std::vector<CudaStreamPtr> streams_;
     bool is_custream_init_ = false;
+#endif
+
+protected:
+    void init();
+public:
+
+#ifdef ENABLE_CUDA
+    InferTensorBufferPoolPtr pool_ = nullptr;
 #endif
 
 public:
@@ -66,6 +73,21 @@ public:
 
     virtual ModelOutput infer() = 0;
 
+    virtual ModelOutput infer(const TensorBuffer&) = 0;
+
+    // 获取张量
+#ifdef ENABLE_CUDA
+    TensorBuffer GetTensorBuffer() {
+        assert(pool_.get());
+        float* data = pool_->Acquire();
+        return TensorBuffer::wrap(data, shapes());
+    }
+
+    void release(float* data) {
+        assert(pool_.get());
+        pool_->Release(data);
+    }
+#endif    
 
 
     TensorBuffer& tensorBuffer() {

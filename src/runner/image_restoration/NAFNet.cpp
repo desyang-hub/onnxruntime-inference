@@ -31,6 +31,7 @@ TensorBuffer NAFNet::preprocess(const cv::Mat& img) {
     // BGR → RGB, HWC → CHW, uint8 [0,255] → float32 [0,1]
     auto& shape = backend_->shapes();
 
+    // cpu空间也可以预分配，避免重复建立空间
     TensorBuffer buf = TensorBuffer::create({1, shape[1], shape[2], shape[3]});
     const cv::Size size(buf.shape[3], buf.shape[2]);
     size_t plane_size = buf.plane_size();
@@ -40,6 +41,16 @@ TensorBuffer NAFNet::preprocess(const cv::Mat& img) {
     buf.letterbox_params[0] = pad_to_size(rgb_img, rgb_img, size);
 
     convert_and_normalize(rgb_img, buf.data, size, norm_scale_, bgr2rgb_);
+
+    
+#ifdef ENABLE_CUDA
+    // 将数据拷贝到GPU
+    float* data = backend_->data();
+    cudaMemcpyAsync(data, buf.data, buf.num_elements * sizeof(float), cudaMemcpyHostToDevice, streams_[0].get());
+    cudaStreamSynchronize(streams_[0].get());
+    buf.data = data;
+#endif
+
 
     return buf;
 }

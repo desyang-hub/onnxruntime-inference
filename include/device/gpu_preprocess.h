@@ -2,9 +2,7 @@
 #pragma once
 
 #include <cstdint>
-#include "cuda_utils.h"
-
-#ifdef ENABLE_CUDA
+#include <cuda_runtime.h>
 
 extern "C" void gpu_yolo_preprocess(
     const uint8_t* d_src_bgr, float* d_dst_nchw,
@@ -13,5 +11,3 @@ extern "C" void gpu_yolo_preprocess(
     float scale, int pad_left, int pad_top,
     float norm_scale, uint8_t pad_value,
     cudaStream_t stream);
-
-#endif

@@ -41,6 +41,10 @@ private:
     // uint8_t* d_input_bgr_ = nullptr;
     std::shared_ptr<uint8_t> d_input_bgr_{};
     CudaStreamPtr cuStream_;
+    
+    std::unordered_map<uint8_t*, CudaStreamPtr> cuStreams_;
+    // 现在要的是缓冲池
+    InferTensorBufferPoolPtr pool_; // 每次取出空闲指针来用即可
 #endif
     
 public:

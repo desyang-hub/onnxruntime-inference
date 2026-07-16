@@ -16,7 +16,6 @@
 #include "preprocess/utils.h"
 #include "backend/OrtSessionWrapper.h"
 #include "logger/logger.h"
-#include "device/gpu_preprocess.h"
 
 YoloDetector::YoloDetector(const YAML::Node& config) : Detector(config["model"]), config_(config) 
 {
@@ -32,17 +31,24 @@ YoloDetector::YoloDetector(const YAML::Node& config) : Detector(config["model"])
     max_detections_     = config_["postprocess"]["max_detections"].as<size_t>(300);
 
 #ifdef ENABLE_CUDA
+    size_t size = backend_->pool_->capacity();
     int max_pixels = backend_->tensorBuffer().plane_size();
-    uint8_t* input_bgr = nullptr;
-    cudaMalloc(&input_bgr, max_pixels * sizeof(float));       // 原始图 H2D 暂存
 
-    d_input_bgr_ = std::shared_ptr<uint8_t>(input_bgr, [](uint8_t* input_bgr){
-        cudaFree(input_bgr);
-    });
+    pool_ = std::make_unique<InferTensorBufferPool>(size, max_pixels * sizeof(float));
+    for (int i = 0; i < size; ++i) {
+        uint8_t* data = pool_->Acquire<uint8_t>();
 
-    cudaStream_t stream{};
-    cudaStreamCreate(&stream);
-    cuStream_.reset(stream);
+        // cuStreamId_[data] = i;
+        cudaStream_t stream{};
+        cudaStreamCreate(&stream);
+        // cuStreams_[i].reset(stream);
+        CudaStreamPtr p;
+        p.reset(stream);
+        cuStreams_.insert({data, std::move(p)});
+
+        pool_->Release(data);
+    }
+
 #endif
 }
 
@@ -75,26 +81,29 @@ TensorBuffer YoloDetector::preprocess(const cv::Mat& img)
     int pad_left = (dst_w - new_w) / 2;
     int pad_top  = (dst_h - new_h) / 2;
 
-    float* data = backend_->data();
+    uint8_t* img_buffer = pool_->Acquire<uint8_t>();
+    CudaStreamPtr& cuStream = cuStreams_[img_buffer];
+    
+    LOG_TRACE("element size: {}", backend_->pool_->size());
+    TensorBuffer buf = backend_->GetTensorBuffer();
 
-    // H2D 拷贝原始图（不做任何CPU预处理）
-    cudaMemcpyAsync(d_input_bgr_.get(), img.data,
+    // // H2D 拷贝原始图（不做任何CPU预处理）
+    cudaMemcpyAsync(img_buffer, img.data,
                     img.rows * img.step,
-                    cudaMemcpyHostToDevice, cuStream_.get());
+                    cudaMemcpyHostToDevice, cuStream.get());
 
     // ⭐ 一个 kernel 搞定 resize + pad + bgr2rgb + norm + transpose
     gpu_yolo_preprocess(
-        d_input_bgr_.get(), data,
+        img_buffer, buf.data,
         img.cols, img.rows, img.step, //img.cols * 3,
         dst_w, dst_h,
-        scale, pad_left, pad_top,
+        scale, pad_left, pad_top, 
         norm_scale_, pad_color_[0],
-        cuStream_.get());
+        cuStream.get());
 
-    cudaStreamSynchronize(cuStream_.get());
-
-    TensorBuffer& buf = backend_->tensorBuffer();
-    buf.data = data;
+    cudaStreamSynchronize(cuStream.get());
+    pool_->Release(img_buffer);
+    
     buf.letterbox_params[0] = {scale, pad_left, pad_top, img.cols, img.rows};
 
     return buf;

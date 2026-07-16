@@ -27,7 +27,9 @@ private:
 
 public:
     SyncScheduler(std::shared_ptr<Runner> backend) : pre_stage_(backend), infer_stage_(backend), post_stage_(backend) {}
-    ~SyncScheduler() = default;
+    ~SyncScheduler() {
+        shutdown();
+    }
 
     // 提交任务，返回Future，阻塞调用get, 同步直接用功能方法即可，没必要搞那么复杂
     std::future<OutputType> submit(const InputType& input) override {

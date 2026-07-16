@@ -4,16 +4,11 @@
 #include <memory>
 
 #ifdef ENABLE_CUDA
+
 #include <cuda_runtime.h>
+#include "cuda_stream_deleter.h"
+#include "InferTensorBufferPool.h"
+#include "gpu_preprocess.h"
 
 
-struct cuda_stream_deleter {
-    void operator()(cudaStream_t stream) {
-        if (stream) {
-            cudaStreamSynchronize(stream); 
-            cudaStreamDestroy(stream);
-        }
-    }
-};
-using CudaStreamPtr = std::unique_ptr<CUstream_st, cuda_stream_deleter>;
 #endif

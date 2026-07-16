@@ -13,6 +13,11 @@
 void InferenceBackend::init() {
     if (is_init_) return;
     tensorBuffer_ = TensorBuffer::create(shapes());
+
+#ifdef ENABLE_CUDA
+    pool_ = std::make_unique<InferTensorBufferPool>(4, tensorBuffer_.plane_size() * sizeof(float));
+#endif
+
     is_init_ = true;
 }
 
@@ -64,9 +69,15 @@ ModelOutput InferenceBackend::run(const TensorBuffer& tenbuf) {
 
 
 void InferenceBackend::warm_up(size_t cnt) {
-    for (int i = 0; i < cnt; ++i) {
-        run(tensorBuffer());
+#ifdef ENABLE_CUDA
+    for (int i = 0; i < pool_->capacity() * cnt; ++i) {
+        float* data = pool_->Acquire<float>();
+        auto tenbuf = TensorBuffer::wrap(data, shapes());
+        infer(tenbuf);
     }
+#else
+    infer(tensorBuffer());
+#endif
     // std::cout << "热身已完成" << std::endl;
     LOG_INFO("Backend warm up successfully");
 }

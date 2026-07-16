@@ -60,6 +60,10 @@ private:
     Ort::MemoryInfo active_mem_info_{nullptr};
     int kGPUId = -1; // 使用gpu的设备编号
 
+#ifdef ENABLE_CUDA
+    std::unordered_map<float*, Ort::Value> input_tensors_;
+#endif
+
 public:
     // gpu环境下返回GPU数据指针
     float *data() override
@@ -369,6 +373,8 @@ public:
                 // Ort::Allocator allocator(*session_, mem_info);
                 // Ort::Allocator 提供了 GetInfo() 方法,包含了该分配器绑定的设备类型、设备ID、内存类型和分配策略。
 
+                active_mem_info_ = std::move(mem_info);
+
                 setActivateGPUId(candidate.device_id);
                 enableGPUActivate();
                 LOG_INFO("[Device] ✅ Active EP: {}, logical device {}", candidate.name, activateGPUId());
@@ -393,6 +399,7 @@ public:
     // 初始化张量，使得后续的推理全部使用该张量上进行
     void input_tensor_init()
     {
+        init();
         // 如果GPU可用
         if (isGPUActivate())
         {
@@ -403,6 +410,27 @@ public:
                 input_shapes_.size());
 
             pdata_ = input_tensor_.GetTensorMutableData<float>();
+            input_tensors_[pdata_] = std::move(input_tensor_);
+
+#ifdef ENABLE_CUDA
+            const auto& shape = shapes();
+            int64_t num_elements = shape[1] * shape[2] * shape[3];
+            for (int i = 0; i < pool_->capacity(); ++i) {
+                float* data = pool_->Acquire();
+    
+                input_tensors_[data] = Ort::Value::CreateTensor<float>(
+                    active_mem_info_,
+                    (float *)data,
+                    num_elements,
+                    shapes().data(),
+                    shapes().size()
+                );
+
+                LOG_TRACE("{} tensor is valid: {}", i, input_tensors_[data].IsTensor());
+    
+                pool_->Release(data);
+            }
+#endif
         }
         else
         {
@@ -421,26 +449,49 @@ public:
 
     // 推理无需数据，因为推理过程使用的是推理器的缓存好的空间，只需要将数据拷贝到这里即可，而这由基类完成
     ModelOutput infer() override {
-
         auto& tensor_buffer = tensorBuffer();
+        return infer(tensor_buffer);
+    }
 
+
+    /// @brief 通过传入的数据进行推理
+    /// @param tenbuf 预处理好的数据
+    /// @return 推理结果
+    ModelOutput infer(const TensorBuffer& tenbuf) override {
+
+// #ifdef ENABLE_CUDA
+//         if (isGPUActivate()) {
+//             // 使用异步stream进行数据拷贝时，使用内存屏障来保证GPU数据同步
+//             cudaDeviceSynchronize();
+//         }
+// #endif
+
+        // 是因为热身用的随机tensor
 #ifdef ENABLE_CUDA
-        if (isGPUActivate()) {
-            // 使用异步stream进行数据拷贝时，使用内存屏障来保证GPU数据同步
-            cudaDeviceSynchronize();
-        }
-#endif
+
+        auto& input_tensor = input_tensors_[tenbuf.data];
+        LOG_TRACE("tensor valid: {}", input_tensor.IsTensor());
+#else
+        auto& input_tensor = input_tensor_;
+#endif       
 
         // 进行推理
         auto timer = ScopedTimer("InferTimer");
         std::vector<Ort::Value> ort_outputs = session_->Run(
             Ort::RunOptions{},
             input_names_c_str_.data(),
-            &input_tensor_,
+            &input_tensor,
             input_names_c_str_.size(), // 单个节点
             output_names_c_str_.data(),
             output_names_c_str_.size());
         LOG_DEBUG("Model infer run spends: {} ms", timer.elapsed_ms());
+
+        // 推理完成回收数据
+#ifdef ENABLE_CUDA
+        LOG_TRACE("Run After");
+        pool_->Release(tenbuf.data);
+        LOG_TRACE("TensorBuffer pool Release addr: {}", fmt::ptr(tenbuf.data));
+#endif
 
         // ========== 3. Ort::Value → TensorBuffer ==========
         ModelOutput result;
@@ -466,7 +517,7 @@ public:
                 std::reinterpret_pointer_cast<void>(guard));
 
             // 此处赋值不合理
-            result.tensors[output_names_[i]].letterbox_params = tensor_buffer.letterbox_params;
+            result.tensors[output_names_[i]].letterbox_params = tenbuf.letterbox_params;
         }
 
         return result;
