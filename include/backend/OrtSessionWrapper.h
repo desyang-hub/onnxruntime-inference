@@ -60,9 +60,7 @@ private:
     Ort::MemoryInfo active_mem_info_{nullptr};
     int kGPUId = -1; // 使用gpu的设备编号
 
-#ifdef ENABLE_CUDA
     std::unordered_map<float*, Ort::Value> input_tensors_;
-#endif
 
 public:
     // gpu环境下返回GPU数据指针
@@ -410,21 +408,31 @@ public:
                 input_shapes_.size());
 
             pdata_ = input_tensor_.GetTensorMutableData<float>();
-            input_tensors_[pdata_] = std::move(input_tensor_);
+            input_tensors_.insert_or_assign(pdata_, std::move(input_tensor_));
 
 #ifdef ENABLE_CUDA
             const auto& shape = shapes();
             int64_t num_elements = shape[1] * shape[2] * shape[3];
             for (int i = 0; i < pool_->capacity(); ++i) {
                 float* data = pool_->Acquire();
-    
-                input_tensors_[data] = Ort::Value::CreateTensor<float>(
-                    active_mem_info_,
-                    (float *)data,
-                    num_elements,
-                    shapes().data(),
-                    shapes().size()
+
+                input_tensors_.insert_or_assign(data, 
+                    Ort::Value::CreateTensor<float>(
+                        active_mem_info_,
+                        (float *)data,
+                        num_elements,
+                        shapes().data(),
+                        shapes().size()
+                    )
                 );
+    
+                // input_tensors_[data] = Ort::Value::CreateTensor<float>(
+                //     active_mem_info_,
+                //     (float *)data,
+                //     num_elements,
+                //     shapes().data(),
+                //     shapes().size()
+                // );
 
                 LOG_TRACE("{} tensor is valid: {}", i, input_tensors_[data].IsTensor());
     
@@ -444,6 +452,8 @@ public:
                 tensor_buffer.shape.size());
 
             pdata_ = input_tensor_.GetTensorMutableData<float>();
+            LOG_TRACE("pdata addr: {}", fmt::ptr(pdata_));
+            input_tensors_.insert_or_assign(pdata_, std::move(input_tensor_));
         }
     }
 
@@ -467,13 +477,16 @@ public:
 // #endif
 
         // 是因为热身用的随机tensor
-#ifdef ENABLE_CUDA
+// #ifdef ENABLE_CUDA
 
-        auto& input_tensor = input_tensors_[tenbuf.data];
+        if (input_tensors_.find(tenbuf.data) == input_tensors_.end()) {
+            throw std::runtime_error("not found");
+        }
+        auto& input_tensor = input_tensors_.at(tenbuf.data);
         LOG_TRACE("tensor valid: {}", input_tensor.IsTensor());
-#else
-        auto& input_tensor = input_tensor_;
-#endif       
+// #else
+//         auto& input_tensor = input_tensor_;
+// #endif       
 
         // 进行推理
         auto timer = ScopedTimer("InferTimer");
@@ -518,6 +531,7 @@ public:
 
             // 此处赋值不合理
             result.tensors[output_names_[i]].letterbox_params = tenbuf.letterbox_params;
+            LOG_TRACE("param: {}", tenbuf.letterbox_params[0].scale);
         }
 
         return result;

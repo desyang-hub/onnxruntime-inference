@@ -76,13 +76,17 @@ public:
     virtual ModelOutput infer(const TensorBuffer&) = 0;
 
     // 获取张量
-#ifdef ENABLE_CUDA
     TensorBuffer GetTensorBuffer() {
+#ifdef ENABLE_CUDA
         assert(pool_.get());
-        float* data = pool_->Acquire();
-        return TensorBuffer::wrap(data, shapes());
+        float* p = pool_->Acquire();
+#else
+        float* p = data();
+#endif
+        return TensorBuffer::wrap(p, shapes());
     }
 
+#ifdef ENABLE_CUDA
     void release(float* data) {
         assert(pool_.get());
         pool_->Release(data);

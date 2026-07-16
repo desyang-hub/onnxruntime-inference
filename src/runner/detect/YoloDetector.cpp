@@ -113,8 +113,8 @@ TensorBuffer YoloDetector::preprocess(const cv::Mat& img)
     cv::Mat resized;
 
     const auto& shapes = backend_->shapes();
-
-    TensorBuffer buf = TensorBuffer::create({1, shapes[1], shapes[2], shapes[3]});
+    
+    TensorBuffer buf = backend_->GetTensorBuffer();
 
     cv::Size size(shapes[3], shapes[2]);
     // b, c, h, w

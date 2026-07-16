@@ -32,13 +32,15 @@ TensorBuffer NAFNet::preprocess(const cv::Mat& img) {
     auto& shape = backend_->shapes();
 
     // cpu空间也可以预分配，避免重复建立空间
-    TensorBuffer buf = TensorBuffer::create({1, shape[1], shape[2], shape[3]});
+    TensorBuffer buf = backend_->tensorBuffer();
     const cv::Size size(buf.shape[3], buf.shape[2]);
     size_t plane_size = buf.plane_size();
 
     cv::Mat rgb_img;
     cv::cvtColor(img, rgb_img, cv::COLOR_BGR2RGB);
     buf.letterbox_params[0] = pad_to_size(rgb_img, rgb_img, size);
+
+    LOG_TRACE("ptr: {}", fmt::ptr(buf.data));
 
     convert_and_normalize(rgb_img, buf.data, size, norm_scale_, bgr2rgb_);
 
