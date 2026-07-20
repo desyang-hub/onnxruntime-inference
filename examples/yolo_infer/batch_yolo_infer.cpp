@@ -56,7 +56,7 @@ int main(int argc, char const *argv[])
         for (int i = 0; i < batch; ++i) {
             std::future<Detector::OutputType> output = scheduler.submit(img);
 
-            std::vector<Detection> dets = output.get()[0];
+            std::vector<Detection> dets = output.get();
 
             std::cout << "detection nums: " << dets.size() << std::endl;
 

@@ -153,7 +153,7 @@ public:
         bool isTensorRTAvailable = false;
 
 #ifdef ENABLE_CUDA
-        static constexpr unsigned long long kMaxGPUMemLimit = 4; // 限制4GB显存空间
+        static constexpr unsigned long long kMaxGPUMemLimit = 8; // 限制4GB显存空间
 
         // 1. 尝试 TensorRT
         // const std::string &tensorrt_provider = "TensorrtExecutionProvider";
@@ -597,7 +597,7 @@ public:
                 data_ptr, getOutputShapes()
             );
             
-            LOG_DEBUG("gpu output buffer: {}", fmt::ptr(output_buffer_ptr));
+            LOG_TRACE("gpu output buffer: {}", fmt::ptr(output_buffer_ptr));
             result.tensors[output_names_[0]].call_back = [this, output_buffer_ptr]{
                 gpu_output_buffer_->Release(output_buffer_ptr);
             };

@@ -28,7 +28,7 @@ class Detector : public ModelRunner
 {
 public:
     using InputType = cv::Mat;
-    using OutputType = std::vector<std::vector<Detection>>;
+    using OutputType = std::vector<Detection>; // output 指代的一个结果，batch的推理结果是一个vector<OutputType>
 private:
     std::vector<std::string> labels_;
 public:
@@ -41,9 +41,9 @@ public:
 #ifdef ENABLE_CUDA
     virtual void preprocess(const InputType&, TensorBuffer&, int offset) = 0;
 #endif
-    virtual std::vector<std::vector<Detection>> postprocess(const ModelOutput&) = 0;
+    virtual std::vector<OutputType> postprocess(const ModelOutput&) = 0;
 
-    std::vector<Detection> detect(const cv::Mat& img);
+    OutputType detect(const cv::Mat& img);
 
     const std::string& class_label(size_t id) const;
 };

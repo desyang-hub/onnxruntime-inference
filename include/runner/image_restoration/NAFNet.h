@@ -17,19 +17,21 @@ private:
 #ifdef ENABLE_CUDA
     std::vector<CudaStreamPtr> streams_;
     std::unique_ptr<BufferPool> cpu_buffer_pool_;
+    std::unique_ptr<BufferPool> cpu_rgb_buffer_pool_;
+    std::vector<int64_t> single_shapes_;
 #endif
 
 public:
     NAFNet(const YAML::Node& config);
 
     TensorBuffer preprocess(const cv::Mat&) override;
-    std::vector<cv::Mat> postprocess(const ModelOutput&) override;
+    std::vector<OutputType> postprocess(const ModelOutput&) override;
 
 #ifdef ENABLE_CUDA
     void preprocess(const cv::Mat&, TensorBuffer&, int offset) override;
 #endif
 
-    TensorBuffer preprocess(const std::vector<cv::Mat>& imgs);
+    TensorBuffer preprocess(const std::vector<InputType>& imgs);
 
-    std::vector<cv::Mat> postprocess(const TensorBuffer& tensor_buf, size_t batch);
+    std::vector<OutputType> postprocess(const TensorBuffer& tensor_buf, size_t batch);
 };

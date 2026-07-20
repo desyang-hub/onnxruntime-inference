@@ -39,7 +39,7 @@ public:
         TensorBuffer tenbuf = pre_stage_.execute(input);
         ModelOutput model_out = infer_stage_.execute(tenbuf);
         
-        p.set_value(post_stage_.execute(model_out));
+        p.set_value(post_stage_.execute(model_out)[0]);
         return fut;
     }
 

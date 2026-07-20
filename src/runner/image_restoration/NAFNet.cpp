@@ -30,6 +30,11 @@ NAFNet::NAFNet(const YAML::Node& config) : Restorer(config["model"]) {
     size_t num_output_elements = std::accumulate(output_shapes.begin(), output_shapes.end(), size_t{1}, std::multiplies<size_t>());
 
     cpu_buffer_pool_ = std::make_unique<BufferPool>(buffer_size, num_output_elements * sizeof(float));
+    cpu_rgb_buffer_pool_ = 
+    std::make_unique<BufferPool>(buffer_size, num_output_elements / batch_size  * sizeof(float));
+
+    single_shapes_ = backend_->shapes();
+    single_shapes_[0] = 1;
 #endif 
 }
 
@@ -70,10 +75,18 @@ TensorBuffer NAFNet::preprocess(const cv::Mat& img) {
 void NAFNet::preprocess(const cv::Mat& img, TensorBuffer& tenbuf, int offset) {
         // ====== 1. 预处理 ======
     // BGR → RGB, HWC → CHW, uint8 [0,255] → float32 [0,1]
-    auto& shape = backend_->shapes();
+
+    if (!tenbuf.valid()) {
+        LOG_DEBUG("benbuf is invalid!");
+        throw std::runtime_error("benbuf is invalid!");
+    }
+
+    LOG_TRACE("tenbuf data ptr: {}", fmt::ptr(tenbuf.data));
 
     // cpu空间也可以预分配，避免重复建立空间
-    TensorBuffer buf = TensorBuffer::create(shape);
+    auto cpu_buffer = cpu_rgb_buffer_pool_->Acquire();
+    
+    TensorBuffer buf = TensorBuffer::wrap(cpu_buffer.get(), single_shapes_);
     const cv::Size size(buf.shape[3], buf.shape[2]);
     size_t plane_size = buf.plane_size();
 
@@ -85,8 +98,8 @@ void NAFNet::preprocess(const cv::Mat& img, TensorBuffer& tenbuf, int offset) {
 
     convert_and_normalize(rgb_img, buf.data, size, norm_scale_, bgr2rgb_);
 
-    cudaMemcpyAsync(tenbuf.data + offset * tenbuf.plane_size() * sizeof(float), 
-    buf.data, buf.num_elements * sizeof(float), cudaMemcpyHostToDevice, streams_[0].get());
+    cudaMemcpyAsync(tenbuf.data + offset * tenbuf.plane_size(), 
+    buf.data, buf.num_elements * sizeof(float), cudaMemcpyHostToDevice, streams_[offset].get());
     cudaStreamSynchronize(streams_[offset].get());
 }
 #endif

@@ -2,6 +2,7 @@
 
 #include <opencv2/opencv.hpp>
 #include <memory>
+#include <vector>
 
 #include "TensorBuffer.h"
 #include "scheduler/type_trait/runner_type_trait.h"
@@ -30,6 +31,12 @@ public:
     TensorBuffer execute(const typename runner_type_trait<Runner>::InputType& inp) override {
         return backend_->preprocess(inp); // CPU 密集
     }
+
+#ifdef ENABLE_CUDA
+    void execute(const typename runner_type_trait<Runner>::InputType& inp, TensorBuffer& tenbuf, int offset) {
+        backend_->preprocess(inp, tenbuf, offset); // GPU批量预处理
+    }
+#endif
 };
 
 /// @brief 推理阶段实现
@@ -48,12 +55,13 @@ public:
 /// @brief 后处理阶段实现
 /// @tparam Runner 推理器类型
 template<class Runner>
-class PostStage : public Stage<ModelOutput, typename runner_type_trait<Runner>::OutputType> {
+class PostStage : public Stage<ModelOutput, std::vector<typename runner_type_trait<Runner>::OutputType>> {
 private:
     std::shared_ptr<Runner> backend_;
 public:
     PostStage(std::shared_ptr<Runner> backend) : backend_(backend) {}
-    typename runner_type_trait<Runner>::OutputType execute(const ModelOutput& inp) override {
+    std::vector<typename runner_type_trait<Runner>::OutputType>
+    execute(const ModelOutput& inp) override {
         return backend_->postprocess(inp); // CPU 密集
     }
 };

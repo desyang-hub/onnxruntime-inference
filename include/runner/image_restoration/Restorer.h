@@ -11,7 +11,7 @@ class Restorer : public ModelRunner
 {
 public:
     using InputType     = cv::Mat;
-    using OutputType    = std::vector<cv::Mat>;
+    using OutputType    = cv::Mat;
 public:
     Restorer(const YAML::Node& config);
 

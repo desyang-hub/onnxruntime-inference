@@ -125,6 +125,7 @@ set(project_sources
     src/runner/image_restoration/Restorer.cpp
     src/runner/image_restoration/NAFNet.cpp
     src/scheduler/stage/Stage.cpp
+    src/scheduler/InferenceScheduler.cpp
 )
 
 if(ENABLE_CUDA)
@@ -132,16 +133,20 @@ if(ENABLE_CUDA)
         src/device/gpu_preprocess.cu
         src/device/gpu_filter.cu
     )
-else()
-    set(project_device_sources 
-        ""
+
+    set(project_device_cpp
+        src/scheduler/BatchScheduler.cpp
     )
+else()
+    set(project_device_sources "")
+    set(project_device_cpp "")
 endif()
 
 # 编译链接库
 set(INFER_LIB onnx_infer)
 add_library(${INFER_LIB} ""
     ${project_sources}
+    ${project_device_cpp}
     ${project_device_sources}
 )
 

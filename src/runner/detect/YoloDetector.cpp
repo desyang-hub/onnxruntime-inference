@@ -343,7 +343,7 @@ std::vector<std::vector<Detection>> YoloDetector::postprocess(const ModelOutput&
             batch_result.push_back(d);
         }
 
-        LOG_DEBUG("Batch {}: {} filtered → {} after NMS", b, cnt, batch_result.size());
+        // LOG_DEBUG("Batch {}: {} filtered → {} after NMS", b, cnt, batch_result.size());
     }
 
     return results;

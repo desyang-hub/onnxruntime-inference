@@ -39,7 +39,7 @@ int main(int argc, char const *argv[])
 
     cv::Mat img = cv::imread(img_paths[0]);
     auto img_out = scheduler.submit(img);
-    cv::imwrite(save_dir + "/img_out.jpg", img_out.get()[0]);
+    cv::imwrite(save_dir + "/img_out.jpg", img_out.get());
 
     std::cout << "The restormer demo is finish!" << std::endl;
     

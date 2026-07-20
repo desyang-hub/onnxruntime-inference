@@ -3,8 +3,8 @@ model:
   path: "models/yolov8n_dynamic.onnx"
   backend: "onnxruntime"
   shape: [640, 640] # h, w
-  batch: 8 # 推理过程中缓存的batch
-  buffer_size: 16 # 缓存区大小 显存共计 buffer_size * batch * channel * height * width
+  batch: 16 # 推理过程中缓存的batch
+  buffer_size: 32 # 缓存区大小 显存共计 buffer_size * batch * channel * height * width
   gpu: 0
   session_options:
     trt_fp16_enable: "1" # ["0", "1"] 当且仅当TensorrtExecutionProvider有效时可用，默认fp32推理

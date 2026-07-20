@@ -29,7 +29,7 @@ private:
     // 阶段实例
     std::shared_ptr<Stage<InputType, TensorBuffer>>     pre_stage_;
     std::shared_ptr<Stage<TensorBuffer, ModelOutput>>  infer_stage_;
-    std::shared_ptr<Stage<ModelOutput, OutputType>>    post_stage_;
+    std::shared_ptr<Stage<ModelOutput, std::vector<OutputType>>>    post_stage_;
 
 public:
     AsyncScheduler(std::shared_ptr<Runner> backend) : 
@@ -54,7 +54,7 @@ public:
                 // 最后一个阶段任务
                 ModelOutput model_out = infer_stage_->execute(tenbuf);
                 post_executor_->submit([this, p, model_out = std::move(model_out)]() mutable {
-                    OutputType out = post_stage_->execute(model_out);
+                    OutputType out = post_stage_->execute(model_out)[0];
                     p->set_value(std::move(out));
                 });
                 // post_executor_->submit(std::move(task));
