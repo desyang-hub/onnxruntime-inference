@@ -22,7 +22,7 @@
 
 int main(int argc, char const *argv[])
 {
-    // logger::Init(logger::LOGLEVEL_TRACE); // 开启才会打印TRACE
+    logger::Init(logger::LOGLEVEL_TRACE); // 开启才会打印TRACE
     LOG_TRACE("step");
     std::cout << "OnnxRuntime verison: " << Ort::GetVersionString() << std::endl;
     std::cout << "Opencv version: " << cv::getVersionString() << std::endl;

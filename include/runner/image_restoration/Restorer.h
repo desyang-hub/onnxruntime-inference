@@ -21,6 +21,10 @@ public:
     virtual TensorBuffer preprocess(const cv::Mat&) = 0;
     virtual std::vector<cv::Mat> postprocess(const ModelOutput&) = 0;
 
+#ifdef ENABLE_CUDA
+    virtual void preprocess(const InputType&, TensorBuffer&, int offset) = 0;
+#endif
+
     cv::Mat restoration(const cv::Mat& img);
     // std::vector<cv::Mat> restoration(const std::vector<cv::Mat>& imgs);
 };

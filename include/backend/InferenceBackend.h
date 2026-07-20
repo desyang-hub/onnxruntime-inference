@@ -14,6 +14,7 @@
 #include <unordered_map>
 #include <onnxruntime_cxx_api.h>
 #include <stdexcept>
+#include <yaml-cpp/yaml.h>
 
 #include "TensorBuffer.h"
 #include "device/cuda_utils.h"
@@ -49,6 +50,7 @@ private:
 
     bool is_gpu_active_ = false;
     int active_gpu_id_ = -1;
+    std::vector<int64_t> output_shapes_;
 
     void memCpyHostToDevice(const TensorBuffer&);
 
@@ -56,6 +58,8 @@ private:
     std::vector<CudaStreamPtr> streams_;
     bool is_custream_init_ = false;
 #endif
+
+    size_t buffer_size_;
 
 protected:
     void init();
@@ -66,7 +70,10 @@ public:
 #endif
 
 public:
-    InferenceBackend() = default;
+    InferenceBackend(const YAML::Node& config) {
+        buffer_size_ = config["buffer_size"].as<size_t>(4);
+    }
+    
     virtual ~InferenceBackend() = default;
     virtual const std::vector<int64_t>& shapes() const = 0;
     ModelOutput run(const TensorBuffer&);
@@ -74,6 +81,10 @@ public:
     virtual ModelOutput infer() = 0;
 
     virtual ModelOutput infer(const TensorBuffer&) = 0;
+
+    size_t getBufferSize() const {
+        return buffer_size_;
+    }
 
     // 获取张量
     TensorBuffer GetTensorBuffer() {
@@ -131,4 +142,8 @@ public:
     /// @brief 返回推理设备的缓存指针，比如GPU内存数据指针
     /// @return 
     virtual float* data() = 0;
+
+    const std::vector<int64_t>& getOutputShapes() const {
+        return output_shapes_;
+    }
 };

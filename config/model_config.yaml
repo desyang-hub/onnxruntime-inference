@@ -3,8 +3,9 @@ model:
   path: "models/yolov8n_dynamic.onnx"
   backend: "onnxruntime"
   shape: [640, 640] # h, w
-  batch: 1 # 推理过程中缓存的batch
-  gpu: 1
+  batch: 8 # 推理过程中缓存的batch
+  buffer_size: 16 # 缓存区大小 显存共计 buffer_size * batch * channel * height * width
+  gpu: 0
   session_options:
     trt_fp16_enable: "1" # ["0", "1"] 当且仅当TensorrtExecutionProvider有效时可用，默认fp32推理
     execution_providers: ["TensorrtExecutionProvider", "CUDAExecutionProvider"] # 不填默认为CPUExecutionProvider, 为了确保CUDAExecutionProvider生效，导出模型选择动态batch

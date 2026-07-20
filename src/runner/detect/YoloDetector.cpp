@@ -28,12 +28,17 @@ YoloDetector::YoloDetector(const YAML::Node& config) : Detector(config["model"])
 
     conf_threshold_     = config_["postprocess"]["conf_threshold"].as<float>(0.25);
     nms_threshold_      = config_["postprocess"]["nms_threshold"].as<float>(0.45);
-    max_detections_     = config_["postprocess"]["max_detections"].as<size_t>(300);
+    max_detections_     = config_["postprocess"]["max_detections"].as<int>(300);
+
+    auto& output_shape = getOutputShapes();
+    num_attributes_ = output_shape[1];   // 84
+    num_predictions_ = output_shape[2];  // 8400
 
 #ifdef ENABLE_CUDA
-    size_t size = backend_->pool_->capacity();
+    size_t size = getBatchSize();
     int max_pixels = backend_->tensorBuffer().plane_size();
 
+    // gpu data buffer, 用于存储图像数据到GPU，加速预处理过程
     pool_ = std::make_unique<InferTensorBufferPool>(size, max_pixels * sizeof(float));
     for (int i = 0; i < size; ++i) {
         uint8_t* data = pool_->Acquire<uint8_t>();
@@ -47,6 +52,37 @@ YoloDetector::YoloDetector(const YAML::Node& config) : Detector(config["model"])
         cuStreams_.insert({data, std::move(p)});
 
         pool_->Release(data);
+    }
+
+    int batch = getBatchSize();
+    int buf_size = getBufferSize();
+
+    size_t filtered_buffer_bytes_size = batch * max_detections_ * 6 * sizeof(float);
+    d_filtered_buffers_ = 
+    std::make_unique<InferTensorBufferPool>(buf_size, filtered_buffer_bytes_size);
+
+    size_t count_ptr_bytes_size = batch * sizeof(int);
+    d_count_ptrs_ = 
+    std::make_unique<InferTensorBufferPool>(buf_size, count_ptr_bytes_size);
+
+    cpu_buffer_pool_ = std::make_unique<BufferPool>(buf_size, filtered_buffer_bytes_size);
+
+    for (int i = 0; i < buf_size; ++i) {
+        float* d_filtered_buffer = d_filtered_buffers_->Acquire();
+        float* d_count_ptr = d_count_ptrs_->Acquire();
+        auto cpu_buffer = cpu_buffer_pool_->Acquire();
+
+        cudaStream_t stream{};
+        cudaStreamCreate(&stream);
+        filter_streams_[d_filtered_buffer].reset(stream);
+
+        cudaMemsetAsync(d_filtered_buffer,  0, filtered_buffer_bytes_size);
+        cudaMemsetAsync(d_count_ptr,       0, count_ptr_bytes_size);
+        cudaMemsetAsync(cpu_buffer.get(), 0, filtered_buffer_bytes_size);
+
+        
+        d_filtered_buffers_->Release(d_filtered_buffer);
+        d_count_ptrs_->Release(d_count_ptr);
     }
 
 #endif
@@ -84,7 +120,7 @@ TensorBuffer YoloDetector::preprocess(const cv::Mat& img)
     uint8_t* img_buffer = pool_->Acquire<uint8_t>();
     CudaStreamPtr& cuStream = cuStreams_[img_buffer];
     
-    LOG_TRACE("element size: {}", backend_->pool_->size());
+    // LOG_TRACE("element size: {}", backend_->pool_->size());
     TensorBuffer buf = backend_->GetTensorBuffer();
 
     // // H2D 拷贝原始图（不做任何CPU预处理）
@@ -127,19 +163,205 @@ TensorBuffer YoloDetector::preprocess(const cv::Mat& img)
 #endif
 }
 
-std::vector<std::vector<Detection>> YoloDetector::postprocess(const ModelOutput& model_out) 
-{   
-    auto& tensor_buf = model_out.primary();
+
+#ifdef ENABLE_CUDA
+/// @brief GPU环境下的批量预处理
+/// @param img 数据
+/// @param buf GPU TensorBuffer
+/// @param offset 数据偏移量
+void YoloDetector::preprocess(const cv::Mat& img, TensorBuffer& buf, int offset) {
+    auto& s = backend_->shapes();
+    int dst_h = s[2], dst_w = s[3];
+
+    // CPU 端计算 letterbox 参数（纯数学，几乎零耗时）
+    float x_factor = static_cast<float>(dst_w) / img.cols;
+    float y_factor = static_cast<float>(dst_h) / img.rows;
+    float scale = std::min(x_factor, y_factor);
+    constexpr int stride = 32;
+    int new_w = static_cast<int>(std::round(img.cols * scale));
+    int new_h = static_cast<int>(std::round(img.rows * scale));
+
+    new_w -= (new_w % stride);
+    new_h -= (new_h % stride);
+
+    scale = std::min(static_cast<float>(new_w) / img.cols,
+                    static_cast<float>(new_h) / img.rows);
+    new_w = static_cast<int>(std::round(img.cols * scale));
+    new_h = static_cast<int>(std::round(img.rows * scale));
+
+    int pad_left = (dst_w - new_w) / 2;
+    int pad_top  = (dst_h - new_h) / 2;
+
+    uint8_t* img_buffer = pool_->Acquire<uint8_t>();
+    CudaStreamPtr& cuStream = cuStreams_[img_buffer];
+
+    // // H2D 拷贝原始图（不做任何CPU预处理）
+    cudaMemcpyAsync(img_buffer, img.data,
+                    img.rows * img.step,
+                    cudaMemcpyHostToDevice, cuStream.get());
+
+    // ⭐ 一个 kernel 搞定 resize + pad + bgr2rgb + norm + transpose
+    gpu_yolo_preprocess(
+        img_buffer, buf.data + buf.plane_size() * offset,
+        img.cols, img.rows, img.step, //img.cols * 3,
+        dst_w, dst_h,
+        scale, pad_left, pad_top, 
+        norm_scale_, pad_color_[0],
+        cuStream.get());
+
+    cudaStreamSynchronize(cuStream.get());
+    pool_->Release(img_buffer);
+    
+    buf.letterbox_params[offset] = {scale, pad_left, pad_top, img.cols, img.rows};
+
+    // LOG_INFO("preprocess OK offset: {}", offset);
+}
+#endif
+
+
+std::vector<std::vector<Detection>> YoloDetector::postprocess(const ModelOutput& model_out)
+{
+#ifdef ENABLE_CUDA
+    auto tensor_buf = std::move(model_out.primary());
+    const int batch = getBatchSize();
+
+    if (!tensor_buf.valid() || tensor_buf.shape.size() != 3) {
+        LOG_DEBUG("Model output is un valid. tensor_buf.valid: {}, tensor_buf.shape.size: {}", 
+            tensor_buf.valid(), tensor_buf.shape.size());
+        throw std::runtime_error("Model output is invalid.");
+    }
+
+    float* d_filtered_buffer = d_filtered_buffers_->Acquire();
+    int* d_count_ptr = d_count_ptrs_->Acquire<int>();
+    auto& filter_stream = filter_streams_.at(d_filtered_buffer);
+
+
+    // ========== Step 1: GPU Filter ==========
+    launch_filter_and_compact(
+        tensor_buf.data,             // GPU 上的原始输出 [batch, 84, 8400]
+        d_filtered_buffer,
+        d_count_ptr,
+        batch,
+        num_predictions_,            // 8400
+        num_attributes_ - 4,         // 80
+        conf_threshold_,
+        max_detections_,
+        filter_stream.get()
+    );
+
+    // ========== Step 2: D2H 拷贝计数 ==========
+    std::vector<int> host_counts(batch);
+    cudaMemcpyAsync(host_counts.data(), d_count_ptr,
+                    batch * sizeof(int),
+                    cudaMemcpyDeviceToHost, filter_stream.get());
+    cudaError_t err = cudaStreamSynchronize(filter_stream.get());
+    if (err != cudaSuccess) {
+        LOG_ERROR("CUDA sync failed after count copy: {}", cudaGetErrorString(err));
+        return std::vector<std::vector<Detection>>(batch);
+    }
+
+    // 钳制并计算总检测数
+    int total_dets = 0;
+    for (size_t b = 0; b < batch; ++b) {
+        if (host_counts[b] < 0 || host_counts[b] > max_detections_) {
+            LOG_WARN("Batch {} invalid count={}, clamping", b, host_counts[b]);
+            host_counts[b] = std::clamp(host_counts[b], 0, max_detections_);
+        }
+        total_dets += host_counts[b];
+    }
+
+    if (total_dets == 0) {
+        LOG_TRACE("All batches filtered to 0 detections");
+        return std::vector<std::vector<Detection>>(batch);
+    }
+
+    // ========== Step 3: D2H 拷贝紧凑数据 ==========
+    // ⚠️ 关键：stride 必须是 MAX_GPU_DETECTIONS，不是 host_counts[b]
+    auto cpu_filtered = cpu_buffer_pool_->Acquire();
+    // = std::unique_ptr<float[]>(new float[batch * max_detections_ * 6]);
+
+    cudaMemcpyAsync(cpu_filtered.get(), d_filtered_buffer,
+                    batch * max_detections_ * 6 * sizeof(float),
+                    cudaMemcpyDeviceToHost, filter_stream.get());
+    err = cudaStreamSynchronize(filter_stream.get());
+    if (err != cudaSuccess) {
+        LOG_ERROR("CUDA sync failed after data copy: {}", cudaGetErrorString(err));
+        return std::vector<std::vector<Detection>>(batch);
+    }
+
+    d_filtered_buffers_->Release(d_filtered_buffer);
+    d_count_ptrs_->Release(d_count_ptr);
+
+    // ========== Step 4: CPU 解码 + NMS ==========
+    std::vector<std::vector<Detection>> results(batch);
+
+    for (size_t b = 0; b < batch; ++b) {
+        const int cnt = host_counts[b];
+        if (cnt == 0) continue;
+
+        // ⚠️ 关键：按 MAX_GPU_DETECTIONS 寻址，不是按 host_counts
+        const float* pdata = cpu_filtered.get() + b * max_detections_ * 6;
+
+        std::vector<cv::Rect2i> boxes;
+        std::vector<float> confidences;
+        std::vector<int> class_ids;
+        boxes.reserve(cnt);
+        confidences.reserve(cnt);
+        class_ids.reserve(cnt);
+
+        const auto& lp = tensor_buf.letterbox_params[b];
+
+        for (int i = 0; i < cnt; ++i) {
+            const float* det = pdata + i * 6;
+            float cx = det[0], cy = det[1], w = det[2], h = det[3];
+            float score = det[4];
+            int cls = static_cast<int>(det[5]);
+
+            float x1 = std::clamp((cx - 0.5f*w - lp.pad_left) / lp.scale, 0.f, (float)lp.orig_w);
+            float y1 = std::clamp((cy - 0.5f*h - lp.pad_top)  / lp.scale, 0.f, (float)lp.orig_h);
+            float x2 = std::clamp((cx + 0.5f*w - lp.pad_left) / lp.scale, 0.f, (float)lp.orig_w);
+            float y2 = std::clamp((cy + 0.5f*h - lp.pad_top)  / lp.scale, 0.f, (float)lp.orig_h);
+
+            boxes.emplace_back(cv::Rect2i(
+                static_cast<int>(x1), static_cast<int>(y1),
+                static_cast<int>(x2 - x1), static_cast<int>(y2 - y1)));
+            confidences.push_back(score);
+            class_ids.push_back(cls);
+        }
+
+        // NMS
+        std::vector<int> nms_indices;
+        cv::dnn::NMSBoxes(boxes, confidences, conf_threshold_, nms_threshold_, nms_indices);
+
+        std::vector<Detection>& batch_result = results[b];
+        batch_result.reserve(nms_indices.size());
+        for (int idx : nms_indices) {
+            Detection d;
+            d.box = boxes[idx];
+            d.score = confidences[idx];
+            d.class_id = class_ids[idx];
+            batch_result.push_back(d);
+        }
+
+        LOG_DEBUG("Batch {}: {} filtered → {} after NMS", b, cnt, batch_result.size());
+    }
+
+    return results;
+
+#else
+
+    auto tensor_buf = std::move(model_out.primary());
 
     // ========== 1. 基础校验 ==========
     if (!tensor_buf.valid() || tensor_buf.shape.size() != 3) {
-        return {};
+        LOG_DEBUG("Model output is un valid. tensor_buf.valid: {}, tensor_buf.shape.size: {}", 
+            tensor_buf.valid(), tensor_buf.shape.size());
+        throw std::runtime_error("Model output is invalid.");
     }
     
     // YOLOv8 输出形状: [1, numAttributes(4+num_classes), numPredictions]
-    const int num_attributes = static_cast<int>(tensor_buf.shape[1]); // 例如 84
-    const int num_predictions = static_cast<int>(tensor_buf.shape[2]); // 例如 8400
-    const int num_classes = num_attributes - 4;
+    const int num_predictions = num_predictions_; // 例如 8400
+    const int num_classes = num_attributes_ - 4;
     size_t batch = tensor_buf.letterbox_params.size();
 
     std::vector<std::vector<Detection>> results(batch);
@@ -227,7 +449,120 @@ std::vector<std::vector<Detection>> YoloDetector::postprocess(const ModelOutput&
     }
     
     return results;
+#endif
 }
+
+
+// std::vector<std::vector<Detection>> YoloDetector::postprocess(const ModelOutput& model_out) 
+// {   
+//     auto tensor_buf = std::move(model_out.primary());
+
+//     // 将数据移动到cpu
+// #ifdef ENABLE_CUDA
+//     auto cpu_filtered = 
+//     std::unique_ptr<float[]>(new float[tensor_buf.num_elements]);
+//     cudaMemcpy(cpu_filtered.get(), tensor_buf.data, tensor_buf.byte_size(), cudaMemcpyDeviceToHost);
+//     tensor_buf.data = cpu_filtered.get();
+// #endif
+
+//     // ========== 1. 基础校验 ==========
+//     if (!tensor_buf.valid() || tensor_buf.shape.size() != 3) {
+//         LOG_DEBUG("Model output is un valid. tensor_buf.valid: {}, tensor_buf.shape.size: {}", 
+//             tensor_buf.valid(), tensor_buf.shape.size());
+//         throw std::runtime_error("Model output is invalid.");
+//     }
+    
+//     // YOLOv8 输出形状: [1, numAttributes(4+num_classes), numPredictions]
+//     const int num_predictions = num_predictions_; // 例如 8400
+//     const int num_classes = num_attributes_ - 4;
+//     size_t batch = tensor_buf.letterbox_params.size();
+
+//     std::vector<std::vector<Detection>> results(batch);
+//     const size_t plane_size = tensor_buf.plane_size();
+
+//     assert(tensor_buf.letterbox_params.size() >= batch);
+
+// #pragma omp parallel for schedule(dynamic)
+//     for (int b = 0; b < batch; ++b) { // 只需要处理实际的批量大小即可
+//         const float* pdata = tensor_buf.data + b * plane_size;
+//         std::vector<Detection> result;
+    
+//         // ========== 2. 解码候选框 (替代原始的 transpose + row遍历) ==========
+//         // 💡 优化：直接在原始 [84, 8400] 布局上按列访问，避免 cv::transpose 的内存拷贝开销
+//         std::vector<cv::Rect2i> boxes;
+//         std::vector<float> confidences;
+//         std::vector<int> class_ids;
+//         boxes.reserve(max_detections_);
+//         confidences.reserve(max_detections_);
+//         class_ids.reserve(max_detections_);
+        
+//         for (int i = 0; i < num_predictions; ++i) {
+//             // 在 [84, 8400] 布局中，第 i 个预测框的数据起始位置
+//             // cx=pdata[i], cy=pdata[N+i], w=pdata[2N+i], h=pdata[3N+i]
+//             const float* box_ptr = pdata + i;
+//             const float* cls_ptr = pdata + 4 * num_predictions + i;
+            
+//             // Argmax 寻找最佳类别 (替代 minMaxLoc)
+//             float best_score = 0.f;
+//             int best_cls = 0;
+//             for (int c = 0; c < num_classes; ++c) {
+//                 float s = cls_ptr[c * num_predictions];
+//                 if (s > best_score) {
+//                     best_score = s;
+//                     best_cls = c;
+//                 }
+//             }
+            
+//             if (best_score < conf_threshold_) continue;
+            
+//             // 提取 cx, cy, w, h
+//             float cx = box_ptr[0];
+//             float cy = box_ptr[num_predictions];
+//             float ow = box_ptr[2 * num_predictions];
+//             float oh = box_ptr[3 * num_predictions];
+            
+//             // ⭐ 坐标还原到原图 (替代原始的 x_factor 乘法)
+//             float x1 = std::clamp((cx - 0.5f * ow - tensor_buf.letterbox_params[b].pad_left) / tensor_buf.letterbox_params[b].scale, 0.f, (float)tensor_buf.letterbox_params[b].orig_w);
+//             float y1 = std::clamp((cy - 0.5f * oh - tensor_buf.letterbox_params[b].pad_top)  / tensor_buf.letterbox_params[b].scale, 0.f, (float)tensor_buf.letterbox_params[b].orig_h);
+//             float x2 = std::clamp((cx + 0.5f * ow - tensor_buf.letterbox_params[b].pad_left) / tensor_buf.letterbox_params[b].scale, 0.f, (float)tensor_buf.letterbox_params[b].orig_w);
+//             float y2 = std::clamp((cy + 0.5f * oh - tensor_buf.letterbox_params[b].pad_top)  / tensor_buf.letterbox_params[b].scale, 0.f, (float)tensor_buf.letterbox_params[b].orig_h);
+            
+//             // 过滤无效框
+//             if (x2 <= x1 || y2 <= y1) {
+//                 continue;
+//             } 
+            
+//             // 转为 cv::Rect 用于 NMS (OpenCV NMSBoxes 要求 Rect)
+//             boxes.emplace_back(
+//                 static_cast<int>(std::round(x1)), static_cast<int>(std::round(y1)),
+//                 static_cast<int>(std::round(x2 - x1)), static_cast<int>(std::round(y2 - y1))
+//             );
+//             confidences.push_back(best_score);
+//             class_ids.push_back(best_cls);
+//         }
+        
+//         // ========== 3. NMS ==========
+//         std::vector<int> indexes;
+//         if (!boxes.empty()) {
+//             cv::dnn::NMSBoxes(boxes, confidences, conf_threshold_, nms_threshold_, indexes);
+//         }
+        
+//         // ========== 4. 组装最终结果 ==========
+//         result.reserve(indexes.size());
+//         for (int idx : indexes) {
+//             result.push_back({
+//                 boxes[idx],
+//                 confidences[idx],
+//                 class_ids[idx]
+//             });
+//         }
+
+//         // 将并行结果移动到结果中
+//         results[b] = std::move(result);
+//     }
+    
+//     return results;
+// }
 
 
 

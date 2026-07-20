@@ -41,5 +41,7 @@ int main(int argc, char const *argv[])
     auto img_out = scheduler.submit(img);
     cv::imwrite(save_dir + "/img_out.jpg", img_out.get()[0]);
 
+    std::cout << "The restormer demo is finish!" << std::endl;
+    
     return 0;
 }

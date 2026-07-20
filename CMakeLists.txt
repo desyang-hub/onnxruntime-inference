@@ -19,6 +19,8 @@ option(BUILD_EXAMPLES "Build examples" ON)
 message(STATUS "Build examples: ${BUILD_EXAMPLES}")
 option(ENABLE_CUDA "Link against onnxruntime-gpu and enable CUDA provider" OFF)
 message(STATUS "Enable CUDA: ${ENABLE_CUDA}")
+option(BUILD_TEST "Build tests" ON)
+message(STATUS "Build tests: ${BUILD_TEST}")
 
 
 
@@ -113,6 +115,7 @@ find_package(OpenCV REQUIRED HINTS ${OpenCV_DIR})
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/setup_spdlog.cmake)
 
 set(project_sources
+    src/BufferPool.cpp
     src/backend/InferenceBackend.cpp
     src/backend/OrtSessionWrapper.cpp
     src/preprocess/utils.cpp
@@ -127,6 +130,7 @@ set(project_sources
 if(ENABLE_CUDA)
     set(project_device_sources 
         src/device/gpu_preprocess.cu
+        src/device/gpu_filter.cu
     )
 else()
     set(project_device_sources 
@@ -207,4 +211,10 @@ copy_runtime_dlls(main)
 # 构建 exmples 子目录程序
 if(BUILD_EXAMPLES)
     add_subdirectory(examples)
+endif()
+
+
+if(BUILD_TEST)
+    enable_testing()
+    add_subdirectory(tests)
 endif()

@@ -13,6 +13,7 @@
 #include <memory>
 #include <cassert>
 #include <numeric>
+#include <atomic>
 
 #include "preprocess/utils.h"
 
@@ -34,6 +35,15 @@ struct TensorBuffer {
     
     // ==================== 构造与工厂方法 ====================
     TensorBuffer() = default;
+
+    std::function<void()> call_back{};
+
+    ~TensorBuffer() {
+        if (call_back) {
+            call_back();
+            call_back = nullptr;
+        }
+    }
     
     /// @brief 分配指定形状的缓冲区
     static TensorBuffer create(const std::vector<int64_t>& shape_) {

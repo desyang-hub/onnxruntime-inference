@@ -1,4 +1,5 @@
 #include <omp.h>
+#include <memory>
 
 #include "device/cuda_utils.h"
 #include "preprocess/utils.h"
@@ -16,12 +17,19 @@ NAFNet::NAFNet(const YAML::Node& config) : Restorer(config["model"]) {
     bgr2rgb_            = config["preprocess"]["bgr_to_rgb"].as<bool>(true);
 
 #ifdef ENABLE_CUDA
-    streams_.reserve(backend_->shapes()[0]);
-    for (int i = 0; i < backend_->shapes()[0]; ++i) {
+    int batch_size = getBatchSize();
+    streams_.resize(batch_size);
+    for (int i = 0; i < batch_size; ++i) {
         cudaStream_t stream{};
         cudaStreamCreate(&stream);
-        streams_.emplace_back(stream);
+        streams_[i].reset(stream);
     }
+
+    int buffer_size = getBufferSize();
+    auto& output_shapes = getOutputShapes();
+    size_t num_output_elements = std::accumulate(output_shapes.begin(), output_shapes.end(), size_t{1}, std::multiplies<size_t>());
+
+    cpu_buffer_pool_ = std::make_unique<BufferPool>(buffer_size, num_output_elements * sizeof(float));
 #endif 
 }
 
@@ -47,7 +55,7 @@ TensorBuffer NAFNet::preprocess(const cv::Mat& img) {
     
 #ifdef ENABLE_CUDA
     // 将数据拷贝到GPU
-    float* data = backend_->data();
+    float* data = backend_->GetTensorBuffer().data;
     cudaMemcpyAsync(data, buf.data, buf.num_elements * sizeof(float), cudaMemcpyHostToDevice, streams_[0].get());
     cudaStreamSynchronize(streams_[0].get());
     buf.data = data;
@@ -58,9 +66,44 @@ TensorBuffer NAFNet::preprocess(const cv::Mat& img) {
 }
 
 
+#ifdef ENABLE_CUDA
+void NAFNet::preprocess(const cv::Mat& img, TensorBuffer& tenbuf, int offset) {
+        // ====== 1. 预处理 ======
+    // BGR → RGB, HWC → CHW, uint8 [0,255] → float32 [0,1]
+    auto& shape = backend_->shapes();
+
+    // cpu空间也可以预分配，避免重复建立空间
+    TensorBuffer buf = TensorBuffer::create(shape);
+    const cv::Size size(buf.shape[3], buf.shape[2]);
+    size_t plane_size = buf.plane_size();
+
+    cv::Mat rgb_img;
+    cv::cvtColor(img, rgb_img, cv::COLOR_BGR2RGB);
+    buf.letterbox_params[0] = pad_to_size(rgb_img, rgb_img, size);
+
+    LOG_TRACE("ptr: {}", fmt::ptr(buf.data));
+
+    convert_and_normalize(rgb_img, buf.data, size, norm_scale_, bgr2rgb_);
+
+    cudaMemcpyAsync(tenbuf.data + offset * tenbuf.plane_size() * sizeof(float), 
+    buf.data, buf.num_elements * sizeof(float), cudaMemcpyHostToDevice, streams_[0].get());
+    cudaStreamSynchronize(streams_[offset].get());
+}
+#endif
+
+
 std::vector<cv::Mat> NAFNet::postprocess(const ModelOutput& model_out) {
+    // 先将数据拷贝到cpu
+    auto tensor_buf = std::move(model_out.primary());
+
+#ifdef ENABLE_CUDA
+    auto cpu_filtered = cpu_buffer_pool_->Acquire();
+    // std::unique_ptr<float[]>(new float[tensor_buf.num_elements]);
+    cudaMemcpy(cpu_filtered.get(), tensor_buf.data, tensor_buf.byte_size(), cudaMemcpyDeviceToHost);
+    tensor_buf.data = cpu_filtered.get();
+#endif
+
     // ====== 4. 后处理 ======
-    auto& tensor_buf = model_out.primary();
     int64_t plane_size = tensor_buf.plane_size();
     auto& out_shape = tensor_buf.shape;
     size_t batch = tensor_buf.letterbox_params.size();

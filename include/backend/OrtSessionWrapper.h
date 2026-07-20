@@ -24,6 +24,7 @@
 #include "device/cuda_utils.h"
 #include "logger/logger.h"
 #include "ScopedTimer.h"
+#include "device/cuda_utils.h"
 
 GraphOptimizationLevel ParseGraphOptimizationLevel(const std::string &level);
 ExecutionMode ParseExecutionMode(const std::string &mode);
@@ -54,13 +55,24 @@ private:
     std::vector<const char *> output_names_c_str_;
 
     std::unique_ptr<Ort::Allocator> allocator_;
+    std::unique_ptr<Ort::Allocator> cpu_allocator_;
     Ort::Value input_tensor_{nullptr};
     float *pdata_;
 
     Ort::MemoryInfo active_mem_info_{nullptr};
+    Ort::MemoryInfo ort_cpu_memory_info_{nullptr};
     int kGPUId = -1; // 使用gpu的设备编号
 
     std::unordered_map<float*, Ort::Value> input_tensors_;
+    bool is_warm_up = true; // 是否首次热身推理
+
+    size_t num_output_elements_;
+
+#ifdef ENABLE_CUDA
+    std::unordered_map<float*, Ort::Value> output_tensors_;
+    std::unordered_map<float*, CudaStreamPtr> cuStreams_;
+    InferTensorBufferPoolPtr gpu_output_buffer_;
+#endif
 
 public:
     // gpu环境下返回GPU数据指针
@@ -69,7 +81,7 @@ public:
         return pdata_;
     }
 
-    explicit OrtSessionWrapper(const YAML::Node &config) : env_(ORT_LOGGING_LEVEL_ERROR, "OrtSessionWrapper")
+    explicit OrtSessionWrapper(const YAML::Node& config) : InferenceBackend(config), env_(ORT_LOGGING_LEVEL_ERROR, "OrtSessionWrapper")
     {
         std::string model_path = config["path"].as<std::string>();
         // Ort::SessionOptions 配置
@@ -341,6 +353,9 @@ public:
         // 进行热身
         size_t warm_up_num = config["warm_up"].as<size_t>(0);
         warm_up(warm_up_num);
+        is_warm_up = false;
+
+        output_tensor_init();
     }
 
     // ✅ 从已创建的 Session 中反查真实设备
@@ -412,29 +427,21 @@ public:
 
 #ifdef ENABLE_CUDA
             const auto& shape = shapes();
-            int64_t num_elements = shape[1] * shape[2] * shape[3];
+            LOG_TRACE("input_tensor_init shape: {}x{}x{}x{}", shape[0], shape[1], shape[2], shape[3]);
+
+            size_t num_elements = std::accumulate(shape.begin(), shape.end(), size_t{1}, std::multiplies<size_t>());
             for (int i = 0; i < pool_->capacity(); ++i) {
                 float* data = pool_->Acquire();
 
                 input_tensors_.insert_or_assign(data, 
                     Ort::Value::CreateTensor<float>(
                         active_mem_info_,
-                        (float *)data,
+                        data,
                         num_elements,
                         shapes().data(),
                         shapes().size()
                     )
                 );
-    
-                // input_tensors_[data] = Ort::Value::CreateTensor<float>(
-                //     active_mem_info_,
-                //     (float *)data,
-                //     num_elements,
-                //     shapes().data(),
-                //     shapes().size()
-                // );
-
-                LOG_TRACE("{} tensor is valid: {}", i, input_tensors_[data].IsTensor());
     
                 pool_->Release(data);
             }
@@ -457,6 +464,39 @@ public:
         }
     }
 
+
+    void output_tensor_init() {
+        auto& output_shape = getOutputShapes();
+        num_output_elements_ = std::accumulate(output_shape.begin(), output_shape.end(), size_t{1}, std::multiplies<size_t>());
+
+#ifdef ENABLE_CUDA
+        int buffer_size = getBufferSize();
+        // 输出缓冲区大小默认为输入缓冲区的两倍
+        gpu_output_buffer_ = std::make_unique<InferTensorBufferPool>(buffer_size * 2, num_output_elements_ * sizeof(float));
+
+        ort_cpu_memory_info_ = Ort::MemoryInfo::CreateCpu(OrtDeviceAllocator, OrtMemTypeCPU);
+        cpu_allocator_ = std::make_unique<Ort::Allocator>(*session_, ort_cpu_memory_info_);
+
+        for (int i = 0; i < gpu_output_buffer_->capacity(); ++i) {
+            float* data = gpu_output_buffer_->Acquire();
+            
+            output_tensors_.insert_or_assign(data, Ort::Value::CreateTensor<float>(
+                active_mem_info_,
+                data,
+                num_output_elements_,
+                output_shape.data(),
+                output_shape.size()
+            ));
+            gpu_output_buffer_->Release(data);
+
+            // 初始化流
+            cudaStream_t cu_stream{};
+            cudaStreamCreate(&cu_stream);
+            cuStreams_[data].reset(cu_stream);
+        }
+#endif
+    }
+
     // 推理无需数据，因为推理过程使用的是推理器的缓存好的空间，只需要将数据拷贝到这里即可，而这由基类完成
     ModelOutput infer() override {
         auto& tensor_buffer = tensorBuffer();
@@ -469,70 +509,102 @@ public:
     /// @return 推理结果
     ModelOutput infer(const TensorBuffer& tenbuf) override {
 
-// #ifdef ENABLE_CUDA
-//         if (isGPUActivate()) {
-//             // 使用异步stream进行数据拷贝时，使用内存屏障来保证GPU数据同步
-//             cudaDeviceSynchronize();
-//         }
-// #endif
-
-        // 是因为热身用的随机tensor
-// #ifdef ENABLE_CUDA
-
         if (input_tensors_.find(tenbuf.data) == input_tensors_.end()) {
             throw std::runtime_error("not found");
         }
+        
         auto& input_tensor = input_tensors_.at(tenbuf.data);
         LOG_TRACE("tensor valid: {}", input_tensor.IsTensor());
-// #else
-//         auto& input_tensor = input_tensor_;
-// #endif       
 
-        // 进行推理
-        auto timer = ScopedTimer("InferTimer");
-        std::vector<Ort::Value> ort_outputs = session_->Run(
-            Ort::RunOptions{},
-            input_names_c_str_.data(),
-            &input_tensor,
-            input_names_c_str_.size(), // 单个节点
-            output_names_c_str_.data(),
-            output_names_c_str_.size());
-        LOG_DEBUG("Model infer run spends: {} ms", timer.elapsed_ms());
+        ModelOutput result;
+        std::vector<Ort::Value> ort_outputs;
+        float* output_buffer_ptr{};
 
-        // 推理完成回收数据
+        if (is_warm_up || !isGPUActivate()) {
+            // 进行推理
+            auto timer = ScopedTimer("InferTimer");
+            ort_outputs = session_->Run(
+                Ort::RunOptions{},
+                input_names_c_str_.data(),
+                &input_tensor,
+                input_names_c_str_.size(), // 单个节点
+                output_names_c_str_.data(),
+                output_names_c_str_.size());
+            LOG_DEBUG("Model infer run spends: {} ms", timer.elapsed_ms());
+
 #ifdef ENABLE_CUDA
-        LOG_TRACE("Run After");
-        pool_->Release(tenbuf.data);
-        LOG_TRACE("TensorBuffer pool Release addr: {}", fmt::ptr(tenbuf.data));
+            LOG_TRACE("Run After");
+            pool_->Release(tenbuf.data);
+            LOG_TRACE("TensorBuffer pool Release addr: {}", fmt::ptr(tenbuf.data));
 #endif
 
-        // ========== 3. Ort::Value → TensorBuffer ==========
-        ModelOutput result;
-        for (size_t i = 0; i < ort_outputs.size(); ++i)
-        {
-            auto &val = ort_outputs[i];
-            auto type_info = val.GetTensorTypeAndShapeInfo();
+            for (size_t i = 0; i < ort_outputs.size(); ++i) {
+                auto &val = ort_outputs[i];
+                auto type_info = val.GetTensorTypeAndShapeInfo();
 
-            // 提取 shape
-            std::vector<int64_t> shape = type_info.GetShape();
+                // 提取 shape
+                std::vector<int64_t> shape = type_info.GetShape();
 
-            // 零拷贝包装：不复制数据，但绑定 Ort::Value 的生命周期
-            // ort_outputs 会被 move 到 lambda 捕获中，保证指针有效
-            float *data_ptr = val.GetTensorMutableData<float>();
+                // 零拷贝包装：不复制数据，但绑定 Ort::Value 的生命周期
+                // ort_outputs 会被 move 到 lambda 捕获中，保证指针有效
+                float *data_ptr = val.GetTensorMutableData<float>();
 
-            // 创建生命周期守卫，防止 Ort::Value 提前析构
-            auto guard = std::shared_ptr<Ort::Value>(
-                new Ort::Value(std::move(val)),
-                [](Ort::Value *p){ delete p; }); // deleter
+                // 创建生命周期守卫，防止 Ort::Value 提前析构
+                auto guard = std::shared_ptr<Ort::Value>(
+                    new Ort::Value(std::move(val)),
+                    [](Ort::Value *p){ delete p; }); // deleter
+                
+                result.tensors[output_names_[i]] = TensorBuffer::wrap(
+                    data_ptr, shape,
+                    std::reinterpret_pointer_cast<void>(guard)
+                );
 
-            result.tensors[output_names_[i]] = TensorBuffer::wrap(
-                data_ptr, shape,
-                std::reinterpret_pointer_cast<void>(guard));
+                // 此处赋值不合理
+                result.tensors[output_names_[i]].letterbox_params = tenbuf.letterbox_params;
+            }
+        } 
+#ifdef ENABLE_CUDA
+        else {
 
-            // 此处赋值不合理
-            result.tensors[output_names_[i]].letterbox_params = tenbuf.letterbox_params;
-            LOG_TRACE("param: {}", tenbuf.letterbox_params[0].scale);
+            output_buffer_ptr = gpu_output_buffer_->Acquire();
+            
+            if (output_tensors_.find(output_buffer_ptr) == output_tensors_.end()) {
+                LOG_DEBUG_LOC("output buffer not found!");
+                throw std::runtime_error("output buffer not found!");
+            }
+            auto& output_tensor = output_tensors_.at(output_buffer_ptr);
+            LOG_DEBUG("output tensor valid: {}", output_tensor.IsTensor());
+
+            if (cuStreams_.find(output_buffer_ptr) == cuStreams_.end()) {
+                LOG_DEBUG_LOC("cuStreams_ not found!");
+                throw std::runtime_error("cuStreams_ not found!");
+            }
+            auto& cu_stream = cuStreams_.at(output_buffer_ptr);
+    
+            auto timer = ScopedTimer("InferTimer");
+            session_->Run(
+                Ort::RunOptions{},
+                input_names_c_str_.data(), &input_tensor, input_names_c_str_.size(), // 单个节点
+                output_names_c_str_.data(), &output_tensor, output_names_c_str_.size());
+            LOG_DEBUG("Model infer run spends: {} ms", timer.elapsed_ms());
+
+            pool_->Release(tenbuf.data);
+            LOG_TRACE("TensorBuffer pool Release addr: {}", fmt::ptr(tenbuf.data));
+
+            float* data_ptr = output_tensor.GetTensorMutableData<float>();
+            // 将输出拼装到结果中
+            result.tensors[output_names_[0]] = TensorBuffer::wrap(
+                data_ptr, getOutputShapes()
+            );
+            
+            LOG_DEBUG("gpu output buffer: {}", fmt::ptr(output_buffer_ptr));
+            result.tensors[output_names_[0]].call_back = [this, output_buffer_ptr]{
+                gpu_output_buffer_->Release(output_buffer_ptr);
+            };
+
+            result.tensors[output_names_[0]].letterbox_params = tenbuf.letterbox_params;
         }
+#endif
 
         return result;
     }

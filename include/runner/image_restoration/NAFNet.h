@@ -1,6 +1,9 @@
 #pragma once
 
+#include <memory>
+
 #include "Restorer.h"
+#include "BufferPool.h"
 #include "device/cuda_utils.h"
 
 class NAFNet : public Restorer
@@ -12,23 +15,19 @@ private:
     bool bgr2rgb_;
 
 #ifdef ENABLE_CUDA
-    struct cuda_stream_deleter {
-        void operator()(cudaStream_t stream) {
-            if (stream) {
-                cudaStreamSynchronize(stream); 
-                cudaStreamDestroy(stream);
-            }
-        }
-    };
-    using CudaStreamPtr = std::unique_ptr<CUstream_st, cuda_stream_deleter>;
-
     std::vector<CudaStreamPtr> streams_;
+    std::unique_ptr<BufferPool> cpu_buffer_pool_;
 #endif
+
 public:
     NAFNet(const YAML::Node& config);
 
     TensorBuffer preprocess(const cv::Mat&) override;
     std::vector<cv::Mat> postprocess(const ModelOutput&) override;
+
+#ifdef ENABLE_CUDA
+    void preprocess(const cv::Mat&, TensorBuffer&, int offset) override;
+#endif
 
     TensorBuffer preprocess(const std::vector<cv::Mat>& imgs);
 

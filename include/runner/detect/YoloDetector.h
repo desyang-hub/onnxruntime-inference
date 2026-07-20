@@ -13,6 +13,7 @@
 #include "Detector.h"
 #include "device/cuda_utils.h"
 #include "TensorBuffer.h"
+#include "BufferPool.h"
 
 class YoloDetector : public Detector
 {
@@ -32,8 +33,11 @@ private:
     // postprocess
     float conf_threshold_;
     float nms_threshold_;
-    size_t max_detections_;
+    int max_detections_;
     // classes:
+
+    int num_attributes_;   // 84
+    int num_predictions_;  // 8400
 
     std::vector<std::string> labels_;
 
@@ -45,12 +49,22 @@ private:
     std::unordered_map<uint8_t*, CudaStreamPtr> cuStreams_;
     // 现在要的是缓冲池
     InferTensorBufferPoolPtr pool_; // 每次取出空闲指针来用即可
+
+    std::unordered_map<float*, CudaStreamPtr> filter_streams_;
+    InferTensorBufferPoolPtr d_filtered_buffers_;
+    InferTensorBufferPoolPtr d_count_ptrs_;
+
+    BufferPoolPtr cpu_buffer_pool_;
+
 #endif
     
 public:
     explicit YoloDetector(const YAML::Node& config);
 
     virtual TensorBuffer preprocess(const cv::Mat&) override;
+#ifdef ENABLE_CUDA
+    virtual void preprocess(const cv::Mat&, TensorBuffer&, int offset) override;
+#endif
     virtual std::vector<std::vector<Detection>> postprocess(const ModelOutput&) override;
 
     // TensorBuffer preprocess(const cv::Mat& img);

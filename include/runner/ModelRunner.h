@@ -31,4 +31,20 @@ public:
     virtual ~ModelRunner() = default;
     
     ModelOutput infer(const TensorBuffer&);
+
+    TensorBuffer getTensorBuffer() {
+        return backend_->GetTensorBuffer();
+    }
+
+    int getBatchSize() const {
+        return static_cast<int>(backend_->shapes()[0]);
+    }
+
+    int getBufferSize() const {
+        return backend_->getBufferSize();
+    }
+
+    const std::vector<int64_t>& getOutputShapes() const {
+       return backend_->getOutputShapes();
+    }
 };

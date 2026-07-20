@@ -45,3 +45,18 @@ target_link_libraries(logger_test
     PUBLIC
     logger
 )
+
+if(ENABLE_CUDA)
+    add_executable(mini_batch_infer
+        mini_batch_infer.cpp
+    )
+
+    target_link_libraries(mini_batch_infer
+        ${INFER_LIB}
+    )
+endif()
+
+
+
+# target_compile_options(mini_batch_infer PRIVATE -fsanitize=address -fno-omit-frame-pointer -O1)
+# target_link_options(mini_batch_infer PRIVATE -fsanitize=address)

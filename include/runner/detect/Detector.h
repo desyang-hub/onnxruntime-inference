@@ -38,6 +38,9 @@ public:
     static std::unique_ptr<Detector> Load(const std::string& cfg);
 
     virtual TensorBuffer preprocess(const InputType&) = 0;
+#ifdef ENABLE_CUDA
+    virtual void preprocess(const InputType&, TensorBuffer&, int offset) = 0;
+#endif
     virtual std::vector<std::vector<Detection>> postprocess(const ModelOutput&) = 0;
 
     std::vector<Detection> detect(const cv::Mat& img);

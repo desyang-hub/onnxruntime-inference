@@ -9,6 +9,7 @@
 #include "cuda_stream_deleter.h"
 #include "InferTensorBufferPool.h"
 #include "gpu_preprocess.h"
+#include "gpu_filter.h"
 
 
 #endif
