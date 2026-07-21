@@ -126,6 +126,8 @@ set(project_sources
     src/runner/image_restoration/NAFNet.cpp
     src/scheduler/stage/Stage.cpp
     src/scheduler/InferenceScheduler.cpp
+    src/scheduler/SyncScheduler.cpp
+    src/scheduler/AsyncScheduler.cpp
 )
 
 if(ENABLE_CUDA)

@@ -47,7 +47,7 @@ int main(int argc, char const *argv[])
     cap.set(cv::CAP_PROP_FRAME_HEIGHT, 720);
 
     std::string config_path = "config/model_config.yaml";
-    std::unique_ptr<Detector> detector = Detector::Load<YoloDetector>(config_path);
+    auto detector = Detector::Load<YoloDetector>(config_path);
 
     SPSCQueue<cv::Mat> imgs(100);
 

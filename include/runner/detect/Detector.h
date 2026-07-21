@@ -35,7 +35,7 @@ public:
     explicit Detector(const YAML::Node& config);
 
     template<class T>
-    static std::unique_ptr<Detector> Load(const std::string& cfg);
+    static std::shared_ptr<Detector> Load(const std::string& cfg);
 
     virtual TensorBuffer preprocess(const InputType&) = 0;
 #ifdef ENABLE_CUDA
@@ -49,7 +49,7 @@ public:
 };
 
 template<class T>
-std::unique_ptr<Detector> Detector::Load(const std::string& cfg) {
+std::shared_ptr<Detector> Detector::Load(const std::string& cfg) {
     static_assert(std::is_base_of_v<Detector, T> && "type must inherit Detector.");
-    return std::make_unique<T>(YAML::LoadFile(cfg));
+    return std::make_shared<T>(YAML::LoadFile(cfg));
 }

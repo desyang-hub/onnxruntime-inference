@@ -23,7 +23,7 @@ int main(int argc, char const *argv[])
     std::string img_path = "assets/bus.png";
     try
     {
-        std::unique_ptr<Detector> detector = Detector::Load<YoloDetector>(config_path);
+        auto detector = Detector::Load<YoloDetector>(config_path);
 
         cv::Mat img = cv::imread(img_path);
 
