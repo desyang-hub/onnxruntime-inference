@@ -35,6 +35,11 @@ private:
     std::unique_ptr<Stage<TensorBuffer, ModelOutput>>  infer_stage_;    // 推理器
     std::unique_ptr<Stage<ModelOutput, std::vector<OutputType>>>    post_stage_;     // 后处理
 
+    int buffer_size_;
+    ThreadPool pre_executor_;
+    ThreadPool infer_executor_;
+    ThreadPool post_executor_;
+
     void run() {
         while (true) {
             std::unique_lock<std::mutex> lock(mutex_);
@@ -72,24 +77,26 @@ private:
                     pre_futures.reserve(size);
                     batch_prms.reserve(size);
             
-                    auto* row_buf = tenbufPtr.get();
+                    auto row_buf = tenbufPtr.get();
                     for (int i = 0; i < size; ++i) {
                         InputType img = std::move(inputs_.front());
                         inputs_.pop();
                         batch_prms.push_back(std::move(promises_.front()));
                         promises_.pop();
             
-                        pre_futures.push_back(pool_.enqueue([this, img = std::move(img), row_buf, i]() {
+                        pre_futures.push_back(pre_executor_.enqueue([this, img = std::move(img), row_buf, i]() {
                             pre_stage_->execute(img, *row_buf, i);
                         }));
                     }
             
                     // ✅ 关键修复：推理+后处理 lambda 必须完整 try-catch
-                    pool_.enqueue([this, 
+                    infer_executor_.enqueue([this, 
                                    pre_futures = std::move(pre_futures),
                                    tenbufPtr,
-                                   prms = std::move(batch_prms)]() mutable {
-                        try {
+                                   prms = std::move(batch_prms)]() mutable 
+                    {
+                        try 
+                        {
                             // 1. 等待预处理（带异常传播）
                             for (auto& fut : pre_futures) {
                                 fut.get(); // 异常会被外层 catch 捕获
@@ -97,15 +104,34 @@ private:
             
                             // 2. GPU 推理
                             ModelOutput model_out = infer_stage_->execute(*tenbufPtr);
-            
-                            // 3. 后处理（不再嵌套 enqueue，避免二次异常丢失）
-                            std::vector<OutputType> outputs = post_stage_->execute(model_out);
-            
-                            // 4. 安全设置结果
-                            for (size_t i = 0; i < prms.size(); ++i) {
-                                prms[i]->set_value(std::move(outputs[i]));
-                            }
-                        } catch (...) {
+
+                            post_executor_.enqueue([this, model_out = std::move(model_out), 
+                                prms = std::move(prms)]
+                            {
+                                try {
+                                    // 3. 后处理（不再嵌套 enqueue，避免二次异常丢失）
+                                    std::vector<OutputType> outputs = post_stage_->execute(model_out);
+
+                                    // 4. 安全设置结果
+                                    for (size_t i = 0; i < prms.size(); ++i) {
+                                        prms[i]->set_value(std::move(outputs[i]));
+                                    }
+                                }
+                                catch (...) {
+                                    auto eptr = std::current_exception();
+                                    for (auto& prm : prms) {
+                                        try {
+                                            prm->set_exception(eptr);
+                                        } catch (...) {
+                                            // promise 可能已被设置过，忽略二次设置异常
+                                        }
+                                    }
+                                }
+                            });
+                            
+                        } 
+                        catch (...) 
+                        {
                             // ✅ 兜底：任何异常都传递给所有关联的 promise
                             auto eptr = std::current_exception();
                             for (auto& prm : prms) {
@@ -115,21 +141,6 @@ private:
                                     // promise 可能已被设置过，忽略二次设置异常
                                 }
                             }
-
-                            // try {
-                            //     std::rethrow_exception(eptr); // 必须 rethrow 才能拿到真正的异常对象
-                            // } catch (const Ort::Exception& ort_ex) {
-                            //     // ONNX Runtime 专属异常，包含详细的 CUDA/EP 错误信息
-                            //     LOG_ERROR("ORT Exception: {}", ort_ex.what());
-                            //     LOG_ERROR("ORT Error Code: {}", static_cast<int>(ort_ex.GetOrtErrorCode()));
-                            // } catch (const std::exception& ex) {
-                            //     // 标准 C++ 异常
-                            //     LOG_ERROR("Std Exception: {}", ex.what());
-                            // } catch (...) {
-                            //     // 未知非标准异常
-                            //     LOG_ERROR("Unknown non-standard exception caught");
-                            // }
-
 
                             LOG_ERROR("Batch inference failed: exception propagated to {} promises", prms.size());
                         }
@@ -148,6 +159,10 @@ public:
     BatchScheduler(std::shared_ptr<Runner> backend) :
         backend_(backend),
         is_close_(false),
+        buffer_size_(backend->getBufferSize()),
+        pre_executor_(buffer_size_),
+        infer_executor_(buffer_size_),
+        post_executor_(buffer_size_),
         pre_stage_(std::make_unique<PreStage<Runner>>(backend)),
         infer_stage_(std::make_unique<InferStage<Runner>>(backend)),
         post_stage_(std::make_unique<PostStage<Runner>>(backend))
