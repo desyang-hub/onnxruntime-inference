@@ -8,3 +8,4 @@ trt_cache/
 bin/
 lib/
 output/
+benchmark_output/

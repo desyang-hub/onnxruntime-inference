@@ -1,5 +1,6 @@
 # Benchmark configuration
-# Override any of these values via CLI flags.
+# The base model config is loaded from config_path.
+# Each scheduler can override specific fields — fields not set inherit from the base config.
 
 config_path: "config/model_config.yaml"
 image_path: "assets/bus.png"
@@ -9,6 +10,25 @@ test_duration_sec: 10.0
 min_iterations: 50
 
 concurrent_clients: 1
+
+# ── Per-scheduler model overrides ────────────────────────────
+
+# SyncScheduler: single-image sequential — batch=1 is optimal
+sync_override:
+  batch: 1
+  buffer_size: 4        # small buffer is enough for single-threaded
+
+# AsyncScheduler: pipelined, still one infer per image — batch=1
+async_override:
+  batch: 1
+  buffer_size: 8        # slightly larger for pipeline in-flight
+
+# BatchScheduler: accumulates images into micro-batches — use larger batch
+batch_override:
+  batch: 16
+  buffer_size: 32
+
+# ── Output ───────────────────────────────────────────────────
 
 output_dir: "./benchmark_output"
 export_json: true

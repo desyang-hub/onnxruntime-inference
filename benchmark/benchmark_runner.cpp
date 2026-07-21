@@ -202,6 +202,16 @@ void ResultReporter::export_csv(const std::vector<BenchmarkResult>& results,
 // Config parser from YAML
 // ============================================================
 
+static ModelConfigOverride parse_override(const YAML::Node& node) {
+    if (!node) return {};
+    ModelConfigOverride ov;
+    ov.batch = node["batch"].as<size_t>(0);
+    ov.buffer_size = node["buffer_size"].as<size_t>(0);
+    ov.warm_up = node["warm_up"].as<int>(-1);
+    ov.execution_providers = node["execution_providers"].as<std::string>("");
+    return ov;
+}
+
 BenchmarkConfig parse_benchmark_config(const std::string& yaml_path) {
     YAML::Node cfg = YAML::LoadFile(yaml_path);
     BenchmarkConfig bc;
@@ -215,6 +225,11 @@ BenchmarkConfig parse_benchmark_config(const std::string& yaml_path) {
     bc.output_dir         = cfg["output_dir"].as<std::string>("./benchmark_output");
     bc.export_json        = cfg["export_json"].as<bool>(true);
     bc.export_csv         = cfg["export_csv"].as<bool>(true);
+
+    // Per-scheduler overrides
+    bc.sync_override  = parse_override(cfg["sync_override"]);
+    bc.async_override = parse_override(cfg["async_override"]);
+    bc.batch_override = parse_override(cfg["batch_override"]);
 
     return bc;
 }

@@ -27,6 +27,16 @@
 // Configuration
 // ============================================================
 
+// Per-scheduler model config override
+// Only the fields you set will override the base model config;
+// the rest are inherited from the base YAML.
+struct ModelConfigOverride {
+    size_t batch = 0;             // 0 = use base config value
+    size_t buffer_size = 0;       // 0 = use base config value
+    int warm_up = -1;             // -1 = use base config value
+    std::string execution_providers; // empty = use base config value
+};
+
 struct BenchmarkConfig {
     std::string config_path;
     std::string image_path;
@@ -36,6 +46,12 @@ struct BenchmarkConfig {
     size_t min_iterations = 50;
 
     int concurrent_clients = 1;
+
+    /// Per-scheduler model overrides — each mode gets its own runner
+    /// with the override applied on top of the base config.
+    ModelConfigOverride sync_override;
+    ModelConfigOverride async_override;
+    ModelConfigOverride batch_override;
 
     std::string output_dir = "./benchmark_output";
     bool export_json = true;
@@ -163,6 +179,25 @@ private:
     using Clock = std::chrono::high_resolution_clock;
 
     // --------------------------------------------------------
+    // Internal: apply ModelConfigOverride on top of a YAML::Node
+    // Returns a new YAML::Node with the overrides applied.
+    // --------------------------------------------------------
+    static YAML::Node apply_override(const YAML::Node& base,
+                                     const ModelConfigOverride& ov)
+    {
+        YAML::Node node = base; // deep copy
+        if (ov.batch > 0)
+            node["model"]["batch"] = ov.batch;
+        if (ov.buffer_size > 0)
+            node["model"]["buffer_size"] = ov.buffer_size;
+        if (ov.warm_up >= 0)
+            node["model"]["warm_up"] = ov.warm_up;
+        if (!ov.execution_providers.empty())
+            node["model"]["session_options"]["execution_providers"] = ov.execution_providers;
+        return node;
+    }
+
+    // --------------------------------------------------------
     // Internal: warmup + steady-state for any submit function
     // --------------------------------------------------------
     template <typename SubmitFn>
@@ -266,10 +301,11 @@ public:
     }
 
     // --------------------------------------------------------
-    // Public API
+    // Public API — each mode creates its own runner with the
+    // corresponding config override applied.
     // --------------------------------------------------------
 
-    BenchmarkResult run_sync(std::shared_ptr<Runner> runner,
+    BenchmarkResult run_sync(const YAML::Node& base_config,
                              const BenchmarkConfig& config)
     {
         auto test_img = cv::imread(config.image_path);
@@ -277,6 +313,8 @@ public:
             throw std::runtime_error("Cannot load benchmark image: " + config.image_path);
         }
 
+        YAML::Node node = apply_override(base_config, config.sync_override);
+        std::shared_ptr<Runner> runner = std::make_shared<Runner>(node);
         SyncScheduler<Runner> scheduler(runner);
 
         auto submit_fn = [&](const cv::Mat& img) {
@@ -285,7 +323,7 @@ public:
         return run_pipeline("Sync", test_img, config, std::move(submit_fn));
     }
 
-    BenchmarkResult run_async(std::shared_ptr<Runner> runner,
+    BenchmarkResult run_async(const YAML::Node& base_config,
                               const BenchmarkConfig& config)
     {
         auto test_img = cv::imread(config.image_path);
@@ -293,6 +331,8 @@ public:
             throw std::runtime_error("Cannot load benchmark image: " + config.image_path);
         }
 
+        YAML::Node node = apply_override(base_config, config.async_override);
+        std::shared_ptr<Runner> runner = std::make_shared<Runner>(node);
         AsyncScheduler<Runner> scheduler(runner);
 
         auto submit_fn = [&](const cv::Mat& img) {
@@ -302,7 +342,7 @@ public:
     }
 
 #ifdef ENABLE_CUDA
-    BenchmarkResult run_batch(std::shared_ptr<Runner> runner,
+    BenchmarkResult run_batch(const YAML::Node& base_config,
                               const BenchmarkConfig& config)
     {
         auto test_img = cv::imread(config.image_path);
@@ -310,6 +350,8 @@ public:
             throw std::runtime_error("Cannot load benchmark image: " + config.image_path);
         }
 
+        YAML::Node node = apply_override(base_config, config.batch_override);
+        std::shared_ptr<Runner> runner = std::make_shared<Runner>(node);
         auto batch_scheduler = std::make_shared<BatchScheduler<Runner>>(runner);
 
         auto submit_fn = [&](const cv::Mat& img) {
@@ -319,18 +361,18 @@ public:
     }
 #endif
 
-    std::vector<BenchmarkResult> run_all(std::shared_ptr<Runner> runner,
+    std::vector<BenchmarkResult> run_all(const YAML::Node& base_config,
                                          const BenchmarkConfig& config)
     {
         std::vector<BenchmarkResult> results;
 
         if (gpu_sampler_) gpu_sampler_->start();
 
-        results.push_back(run_sync(runner, config));
-        results.push_back(run_async(runner, config));
+        results.push_back(run_sync(base_config, config));
+        results.push_back(run_async(base_config, config));
 
 #ifdef ENABLE_CUDA
-        results.push_back(run_batch(runner, config));
+        results.push_back(run_batch(base_config, config));
 #endif
 
         if (gpu_sampler_) {
