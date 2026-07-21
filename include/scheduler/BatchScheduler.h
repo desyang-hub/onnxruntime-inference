@@ -11,6 +11,8 @@
 #include "logger/logger.h"
 #include "runner/ModelRunner.h"
 
+static constexpr int kTimeoutMiliSeconds = 5; // ms
+
 // template<class Runner = ModelRunner>
 template<class Runner>
 class BatchScheduler : InferenceScheduler<Runner>
@@ -45,7 +47,7 @@ private:
             std::unique_lock<std::mutex> lock(mutex_);
 
             // 检测是否超时或者batch满了
-            bool condition_met = condition_.wait_for(lock, std::chrono::milliseconds(10), [this]{
+            bool condition_met = condition_.wait_for(lock, std::chrono::milliseconds(kTimeoutMiliSeconds), [this]{
                 return inputs_.size() >= batch_ || is_close_;
             });
 

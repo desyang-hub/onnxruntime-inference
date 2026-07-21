@@ -54,9 +54,15 @@ if(ENABLE_CUDA)
     target_link_libraries(mini_batch_infer
         ${INFER_LIB}
     )
+
+    add_executable(scheduler_infer
+        scheduler_infer.cpp
+    )
+
+    target_link_libraries(scheduler_infer
+        ${INFER_LIB}
+    )
 endif()
-
-
 
 # target_compile_options(mini_batch_infer PRIVATE -fsanitize=address -fno-omit-frame-pointer -O1)
 # target_link_options(mini_batch_infer PRIVATE -fsanitize=address)

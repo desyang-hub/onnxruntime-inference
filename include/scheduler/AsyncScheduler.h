@@ -49,19 +49,45 @@ public:
 
         pre_executor_.enqueue([this, p, input]() mutable
         {
-            TensorBuffer tenbuf = pre_stage_->execute(input);
-            // 异步提交直接结束
-
-            infer_executor_.enqueue([this, p, tenbuf = std::move(tenbuf)]() mutable 
+            try
             {
-                // 最后一个阶段任务
-                ModelOutput model_out = infer_stage_->execute(tenbuf);
-
-                post_executor_.enqueue([this, p, model_out = std::move(model_out)]() mutable 
+                try
                 {
-                    p->set_value(post_stage_->execute(model_out)[0]);
-                });
-            }); 
+                    TensorBuffer tenbuf = pre_stage_->execute(input);
+                    // 异步提交直接结束
+                    infer_executor_.enqueue([this, p, tenbuf = std::move(tenbuf)]() mutable 
+                    {
+                        try
+                        {
+                            // 最后一个阶段任务
+                            ModelOutput model_out = infer_stage_->execute(tenbuf);
+                            post_executor_.enqueue([this, p, model_out = std::move(model_out)]() mutable 
+                            {
+                                p->set_value(post_stage_->execute(model_out)[0]);
+                            });
+                        }
+                        catch(...)
+                        {
+                            // 任何异常都传递给所有关联的 promise
+                            auto eptr = std::current_exception();
+                            p->set_exception(eptr);
+                        }
+                        
+                    }); 
+                }
+                catch(...)
+                {
+                    // 任何异常都传递给所有关联的 promise
+                    auto eptr = std::current_exception();
+                    p->set_exception(eptr);
+                }
+            }
+            catch(...)
+            {
+                // 任何异常都传递给所有关联的 promise
+                auto eptr = std::current_exception();
+                p->set_exception(eptr);
+            }
         });
 
         return fut;

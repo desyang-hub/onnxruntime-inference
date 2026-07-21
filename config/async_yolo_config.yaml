@@ -1,0 +1,54 @@
+# model_config.yaml used in OrtSessionWarpper
+model:
+  path: "models/yolov8n_dynamic.onnx"
+  backend: "onnxruntime"
+  shape: [640, 640] # h, w
+  batch: 1 # 推理过程中缓存的batch
+  buffer_size: 4 # 缓存区大小 显存共计 buffer_size * batch * channel * height * width
+  gpu: 0
+  session_options:
+    trt_fp16_enable: "1" # ["0", "1"] 当且仅当TensorrtExecutionProvider有效时可用，默认fp32推理
+    execution_providers: ["TensorrtExecutionProvider", "CUDAExecutionProvider"] # 不填默认为CPUExecutionProvider, 为了确保CUDAExecutionProvider生效，导出模型选择动态batch
+    graph_optimization_level: "ORT_ENABLE_ALL"
+    intra_op_num_threads: 4
+    inter_op_num_threads: 1
+    execution_mode: "ORT_SEQUENTIAL"
+    log_severity_level: "ERROR"
+    enable_profiling: false,
+    optimized_model_path: "" # 默认保存到 optimize_xxx.onnx
+  warm_up: 3
+  classes: [
+        "person",        "bicycle",      "car",           "motorcycle",
+        "airplane",      "bus",          "train",         "truck",
+        "boat",          "traffic light", "fire hydrant",  "stop sign",
+        "parking meter", "bench",        "bird",          "cat",
+        "dog",           "horse",        "sheep",         "cow",
+        "elephant",      "bear",         "zebra",         "giraffe",
+        "backpack",      "umbrella",     "handbag",       "tie",
+        "suitcase",      "frisbee",      "skis",          "snowboard",
+        "sports ball",   "kite",         "baseball bat",  "baseball glove",
+        "skateboard",    "surfboard",    "tennis racket",   "bottle",
+        "wine glass",    "cup",          "fork",          "knife",
+        "spoon",         "bowl",         "banana",        "apple",
+        "sandwich",      "orange",       "broccoli",      "carrot",
+        "hot dog",       "pizza",        "donut",         "cake",
+        "chair",         "couch",        "potted plant",  "bed",
+        "dining table",  "toilet",       "tv",            "laptop",
+        "mouse",         "remote",       "keyboard",      "cell phone",
+        "microwave",     "oven",         "toaster",       "sink",
+        "refrigerator",  "book",         "clock",         "vase",
+        "scissors",      "teddy bear",   "hair drier",    "toothbrush"
+  ]
+
+preprocess:
+  auto_aspect_ratio: true
+  pad_color: [114, 114, 114]
+  normalize:
+    mean: [0.0, 0.0, 0.0]
+    std: [1.0, 1.0, 1.0]   # YOLOv8 只做 /255，等价于 std=1
+  bgr_to_rgb: true
+
+postprocess:
+  conf_threshold: 0.25
+  nms_threshold: 0.45
+  max_detections: 300

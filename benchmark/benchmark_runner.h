@@ -16,11 +16,14 @@
 
 #include <opencv2/opencv.hpp>
 
+#include "scheduler/SyncScheduler.h"
+#include "scheduler/AsyncScheduler.h"
 #include "scheduler/type_trait/runner_type_trait.h"
 #include "logger/logger.h"
+#include "device/cuda_utils.h"
 
 #ifdef ENABLE_CUDA
-#include <cuda_runtime.h>
+#include "scheduler/BatchScheduler.h"
 #endif
 
 // ============================================================
@@ -52,6 +55,11 @@ struct BenchmarkConfig {
     ModelConfigOverride sync_override;
     ModelConfigOverride async_override;
     ModelConfigOverride batch_override;
+
+    /// Runtime options
+    std::string mode = "all";
+    std::string model_type = "yolo";
+    bool show_gpu_stats = true;
 
     std::string output_dir = "./benchmark_output";
     bool export_json = true;
@@ -225,7 +233,7 @@ private:
 #ifdef ENABLE_CUDA
             cudaEventRecord(warmup_end);
             cudaEventSynchronize(warmup_end);
-            double warmup_ms = 0;
+            float warmup_ms = 0;
             cudaEventElapsedTime(&warmup_ms, warmup_start, warmup_end);
             LOG_INFO("[Warmup] {} completed in {:.1f} ms", mode_name, warmup_ms);
             cudaEventDestroy(warmup_start);
@@ -245,7 +253,7 @@ private:
         auto wall_start = Clock::now();
 
         auto submit_and_measure = [&]() {
-            cv::Mat local_img = test_img.clone();
+            // cv::Mat local_img = test_img.clone();
             std::vector<double> local_latencies;
 
             while (true) {
@@ -257,7 +265,7 @@ private:
                 }
 
                 auto t0 = Clock::now();
-                auto fut = submit_fn(local_img);
+                auto fut = submit_fn(test_img);
                 fut.get();
                 auto t1 = Clock::now();
 

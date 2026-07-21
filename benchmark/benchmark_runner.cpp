@@ -231,5 +231,10 @@ BenchmarkConfig parse_benchmark_config(const std::string& yaml_path) {
     bc.async_override = parse_override(cfg["async_override"]);
     bc.batch_override = parse_override(cfg["batch_override"]);
 
+    // Runtime options
+    bc.mode = cfg["mode"].as<std::string>("all");
+    bc.model_type = cfg["model_type"].as<std::string>("yolo");
+    bc.show_gpu_stats = cfg["show_gpu_stats"].as<bool>(true);
+
     return bc;
 }
