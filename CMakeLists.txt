@@ -223,3 +223,11 @@ if(BUILD_TEST)
     enable_testing()
     add_subdirectory(tests)
 endif()
+
+# Benchmark tool
+option(BUILD_BENCHMARK "Build benchmark tool" ON)
+message(STATUS "Build benchmark: ${BUILD_BENCHMARK}")
+
+if(BUILD_BENCHMARK)
+    add_subdirectory(benchmark)
+endif()

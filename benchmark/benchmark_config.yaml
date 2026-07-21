@@ -1,0 +1,15 @@
+# Benchmark configuration
+# Override any of these values via CLI flags.
+
+config_path: "config/model_config.yaml"
+image_path: "assets/bus.png"
+
+warmup_count: 5
+test_duration_sec: 10.0
+min_iterations: 50
+
+concurrent_clients: 1
+
+output_dir: "./benchmark_output"
+export_json: true
+export_csv: true
