@@ -9,3 +9,6 @@ bin/
 lib/
 output/
 benchmark_output/
+
+*.mp4
+docs/
