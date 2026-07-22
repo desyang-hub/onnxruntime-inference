@@ -84,6 +84,9 @@ struct BenchmarkResult {
     double latency_min_ms = 0.0;
     double latency_max_ms = 0.0;
 
+    /// Effective batch size used for this run (from override or base config)
+    size_t override_batch = 0;
+
     std::vector<double> latency_samples_ms;
 };
 
@@ -116,8 +119,10 @@ class ResultReporter {
 public:
     static void print_table(const std::vector<BenchmarkResult>& results);
     static void export_json(const std::vector<BenchmarkResult>& results,
+                            const BenchmarkConfig& config,
                             const std::string& filepath);
     static void export_csv(const std::vector<BenchmarkResult>& results,
+                           const BenchmarkConfig& config,
                            const std::string& filepath);
 };
 
@@ -146,11 +151,13 @@ inline double percentile(std::vector<double>& samples, double p) {
 
 inline BenchmarkResult compute_result(const std::string& mode_name,
                                       std::vector<double> samples_ms,
-                                      double total_wall_ms) {
+                                      double total_wall_ms,
+                                      size_t override_batch = 0) {
     BenchmarkResult result;
     result.mode_name = mode_name;
     result.total_requests = samples_ms.size();
     result.total_wall_ms  = total_wall_ms;
+    result.override_batch = override_batch;
     result.latency_samples_ms = samples_ms;
 
     if (samples_ms.empty()) return result;
@@ -212,6 +219,7 @@ private:
     BenchmarkResult run_pipeline(const std::string& mode_name,
                                   const cv::Mat& test_img,
                                   const BenchmarkConfig& config,
+                                  size_t override_batch,
                                   SubmitFn submit_fn)
     {
         // --- Warmup ---
@@ -295,7 +303,7 @@ private:
 
         LOG_INFO("[Benchmark] {}: {} requests in {:.1f} ms",
                  mode_name, latencies_ms.size(), total_wall_ms);
-        return detail::compute_result(mode_name, std::move(latencies_ms), total_wall_ms);
+        return detail::compute_result(mode_name, std::move(latencies_ms), total_wall_ms, override_batch);
     }
 
 public:
@@ -328,7 +336,7 @@ public:
         auto submit_fn = [&](const cv::Mat& img) {
             return scheduler.submit(img);
         };
-        return run_pipeline("Sync", test_img, config, std::move(submit_fn));
+        return run_pipeline("Sync", test_img, config, config.sync_override.batch, std::move(submit_fn));
     }
 
     BenchmarkResult run_async(const YAML::Node& base_config,
@@ -346,7 +354,7 @@ public:
         auto submit_fn = [&](const cv::Mat& img) {
             return scheduler.submit(img);
         };
-        return run_pipeline("Async", test_img, config, std::move(submit_fn));
+        return run_pipeline("Async", test_img, config, config.async_override.batch, std::move(submit_fn));
     }
 
 #ifdef ENABLE_CUDA
@@ -365,7 +373,7 @@ public:
         auto submit_fn = [&](const cv::Mat& img) {
             return batch_scheduler->submit(img);
         };
-        return run_pipeline("Batch", test_img, config, std::move(submit_fn));
+        return run_pipeline("Batch", test_img, config, config.batch_override.batch, std::move(submit_fn));
     }
 #endif
 

@@ -124,6 +124,7 @@ void ResultReporter::print_table(const std::vector<BenchmarkResult>& results) {
 }
 
 void ResultReporter::export_json(const std::vector<BenchmarkResult>& results,
+                                  const BenchmarkConfig& config,
                                   const std::string& filepath) {
     std::ofstream ofs(filepath);
     if (!ofs.is_open()) {
@@ -131,15 +132,47 @@ void ResultReporter::export_json(const std::vector<BenchmarkResult>& results,
         return;
     }
 
-    ofs << "{\n  \"timestamp\": \""
+    ofs << "{\n";
+
+    // --- Benchmark parameters (reproducible metadata) ---
+    ofs << "  \"benchmark\": {\n";
+    ofs << "    \"config_path\": \"" << config.config_path << "\",\n";
+    ofs << "    \"image_path\": \"" << config.image_path << "\",\n";
+    ofs << "    \"model_type\": \"" << config.model_type << "\",\n";
+    ofs << "    \"mode\": \"" << config.mode << "\",\n";
+    ofs << "    \"warmup_count\": " << config.warmup_count << ",\n";
+    ofs << "    \"test_duration_sec\": " << std::fixed << std::setprecision(1)
+        << config.test_duration_sec << ",\n";
+    ofs << "    \"min_iterations\": " << config.min_iterations << ",\n";
+    ofs << "    \"concurrent_clients\": " << config.concurrent_clients << ",\n";
+    ofs << "    \"show_gpu_stats\": " << (config.show_gpu_stats ? "true" : "false") << ",\n";
+    ofs << "    \"output_dir\": \"" << config.output_dir << "\"\n";
+    ofs << "  },\n";
+
+    // --- Per-scheduler overrides ---
+    ofs << "  \"overrides\": {\n";
+    ofs << "    \"sync\": { \"batch\": " << config.sync_override.batch
+        << ", \"buffer_size\": " << config.sync_override.buffer_size << " },\n";
+    ofs << "    \"async\": { \"batch\": " << config.async_override.batch
+        << ", \"buffer_size\": " << config.async_override.buffer_size << " },\n";
+    ofs << "    \"batch\": { \"batch\": " << config.batch_override.batch
+        << ", \"buffer_size\": " << config.batch_override.buffer_size << " }\n";
+    ofs << "  },\n";
+
+    // --- Timestamp ---
+    ofs << "  \"timestamp\": "
         << std::chrono::duration_cast<std::chrono::seconds>(
                std::chrono::system_clock::now().time_since_epoch()).count()
-        << "\",\n  \"results\": [\n";
+        << ",\n";
+
+    // --- Results ---
+    ofs << "  \"results\": [\n";
 
     for (size_t i = 0; i < results.size(); ++i) {
         const auto& r = results[i];
         ofs << "    {\n";
         ofs << "      \"mode\": \"" << r.mode_name << "\",\n";
+        ofs << "      \"override_batch\": " << r.override_batch << ",\n";
         ofs << "      \"total_requests\": " << r.total_requests << ",\n";
         ofs << "      \"total_wall_ms\": " << std::fixed << std::setprecision(2)
             << r.total_wall_ms << ",\n";
@@ -170,6 +203,7 @@ void ResultReporter::export_json(const std::vector<BenchmarkResult>& results,
 }
 
 void ResultReporter::export_csv(const std::vector<BenchmarkResult>& results,
+                                 const BenchmarkConfig& config,
                                  const std::string& filepath) {
     std::ofstream ofs(filepath);
     if (!ofs.is_open()) {
@@ -177,12 +211,28 @@ void ResultReporter::export_csv(const std::vector<BenchmarkResult>& results,
         return;
     }
 
-    ofs << "mode,total_requests,wall_time_ms,throughput_qps,"
+    ofs << "# config_path: " << config.config_path << "\n"
+        << "# image_path: " << config.image_path << "\n"
+        << "# model_type: " << config.model_type << "\n"
+        << "# mode: " << config.mode << "\n"
+        << "# warmup_count: " << config.warmup_count << "\n"
+        << "# test_duration_sec: " << config.test_duration_sec << "\n"
+        << "# min_iterations: " << config.min_iterations << "\n"
+        << "# concurrent_clients: " << config.concurrent_clients << "\n"
+        << "# sync_override: batch=" << config.sync_override.batch
+         << ", buffer_size=" << config.sync_override.buffer_size << "\n"
+        << "# async_override: batch=" << config.async_override.batch
+         << ", buffer_size=" << config.async_override.buffer_size << "\n"
+        << "# batch_override: batch=" << config.batch_override.batch
+         << ", buffer_size=" << config.batch_override.buffer_size << "\n";
+
+    ofs << "mode,override_batch,total_requests,wall_time_ms,throughput_qps,"
         << "latency_avg_ms,latency_min_ms,latency_max_ms,"
         << "latency_p50_ms,latency_p90_ms,latency_p95_ms,latency_p99_ms\n";
 
     for (const auto& r : results) {
         ofs << r.mode_name << ","
+            << r.override_batch << ","
             << r.total_requests << ","
             << std::fixed << std::setprecision(2) << r.total_wall_ms << ","
             << std::fixed << std::setprecision(2) << r.throughput_fps << ","
