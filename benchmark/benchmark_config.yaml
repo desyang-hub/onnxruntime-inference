@@ -17,8 +17,8 @@ show_gpu_stats: true
 # ── Benchmark parameters ─────────────────────────────────────
 warmup_count: 5
 test_duration_sec: 10.0
-min_iterations: 50
-concurrent_clients: 16
+min_iterations: 5
+concurrent_clients: 100
 
 # ── Per-scheduler model overrides ────────────────────────────
 # Only the fields you set will override the base model config;
@@ -37,7 +37,7 @@ async_override:
 # BatchScheduler: accumulates images into micro-batches — use larger batch
 batch_override:
   batch: 8
-  buffer_size: 8
+  buffer_size: 16
 
 # ── Output ───────────────────────────────────────────────────
 output_dir: "./benchmark_output"

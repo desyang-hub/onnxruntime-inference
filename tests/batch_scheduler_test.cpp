@@ -36,6 +36,7 @@ int main(int argc, char const *argv[])
     }
 
     // std::cout << "success: " << acc << ", failed: " << failed << std::endl;
+    std::cout << "Prgram always quit successful!" << std::endl;
     
 
     return 0;

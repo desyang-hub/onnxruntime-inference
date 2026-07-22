@@ -70,7 +70,7 @@ private:
 
 #ifdef ENABLE_CUDA
     std::unordered_map<float*, Ort::Value> output_tensors_;
-    std::unordered_map<float*, CudaStreamPtr> cuStreams_;
+    // std::unordered_map<float*, CudaStreamPtr> cuStreams_;
     InferTensorBufferPoolPtr gpu_output_buffer_;
 #endif
 
@@ -273,6 +273,7 @@ public:
                 cuda_options.cudnn_conv_algo_search = OrtCudnnConvAlgoSearchHeuristic; // 快速启动
                 cuda_options.gpu_mem_limit = kMaxGPUMemLimit * 1024 * 1024 * 1024;     // 限制 4GB
                 cuda_options.do_copy_in_default_stream = 1;
+                // cuda_options.user_compute_stream = 
                 session_options.AppendExecutionProvider_CUDA(cuda_options);
                 LOG_INFO("[EP] CUDA registered");
             }
@@ -492,7 +493,7 @@ public:
             // 初始化流
             cudaStream_t cu_stream{};
             cudaStreamCreate(&cu_stream);
-            cuStreams_[data].reset(cu_stream);
+            // cuStreams_[data].reset(cu_stream);
         }
 #endif
     }
@@ -575,11 +576,11 @@ public:
             auto& output_tensor = output_tensors_.at(output_buffer_ptr);
             LOG_DEBUG("output tensor valid: {}", output_tensor.IsTensor());
 
-            if (cuStreams_.find(output_buffer_ptr) == cuStreams_.end()) {
-                LOG_DEBUG_LOC("cuStreams_ not found!");
-                throw std::runtime_error("cuStreams_ not found!");
-            }
-            auto& cu_stream = cuStreams_.at(output_buffer_ptr);
+            // if (cuStreams_.find(output_buffer_ptr) == cuStreams_.end()) {
+            //     LOG_DEBUG_LOC("cuStreams_ not found!");
+            //     throw std::runtime_error("cuStreams_ not found!");
+            // }
+            // auto& cu_stream = cuStreams_.at(output_buffer_ptr);
     
             auto timer = ScopedTimer("InferTimer");
             session_->Run(

@@ -14,6 +14,7 @@
 #include "device/cuda_utils.h"
 #include "TensorBuffer.h"
 #include "BufferPool.h"
+#include "thread/ObjectPool.h"
 
 class YoloDetector : public Detector
 {
@@ -44,7 +45,7 @@ private:
 #ifdef ENABLE_CUDA
     // uint8_t* d_input_bgr_ = nullptr;
     std::shared_ptr<uint8_t> d_input_bgr_{};
-    CudaStreamPtr cuStream_;
+    // CudaStreamPtr cuStream_;
     
     std::unordered_map<uint8_t*, CudaStreamPtr> cuStreams_;
     // 现在要的是缓冲池
@@ -55,7 +56,6 @@ private:
     InferTensorBufferPoolPtr d_count_ptrs_;
 
     BufferPoolPtr cpu_buffer_pool_;
-
 #endif
     
 public:

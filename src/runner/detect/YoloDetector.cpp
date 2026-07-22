@@ -37,25 +37,27 @@ YoloDetector::YoloDetector(const YAML::Node& config) : Detector(config["model"])
 #ifdef ENABLE_CUDA
     size_t size = getBatchSize();
     int max_pixels = backend_->tensorBuffer().plane_size();
+    int batch = getBatchSize();
+    int buf_size = getBufferSize();
+
+    // batch调度器而言，尽量用batch作为缓冲池数量
+    // async调度器而言，最好是buffer_size作为缓冲池数量
+
+    int cu_stream_size = std::max(batch, buf_size);
 
     // gpu data buffer, 用于存储图像数据到GPU，加速预处理过程
-    pool_ = std::make_unique<InferTensorBufferPool>(size, max_pixels * sizeof(float));
+    pool_ = std::make_unique<InferTensorBufferPool>(cu_stream_size, max_pixels * sizeof(float));
     for (int i = 0; i < size; ++i) {
         uint8_t* data = pool_->Acquire<uint8_t>();
 
         // cuStreamId_[data] = i;
         cudaStream_t stream{};
         cudaStreamCreate(&stream);
-        // cuStreams_[i].reset(stream);
-        CudaStreamPtr p;
-        p.reset(stream);
-        cuStreams_.insert({data, std::move(p)});
+        
+        cuStreams_[data].reset(stream);
 
         pool_->Release(data);
     }
-
-    int batch = getBatchSize();
-    int buf_size = getBufferSize();
 
     size_t filtered_buffer_bytes_size = batch * max_detections_ * 6 * sizeof(float);
     d_filtered_buffers_ = 
@@ -117,8 +119,14 @@ TensorBuffer YoloDetector::preprocess(const cv::Mat& img)
     int pad_left = (dst_w - new_w) / 2;
     int pad_top  = (dst_h - new_h) / 2;
 
+    /**
+     * @note 目前找到问题了，cuStreams_初始化当前只参考batch的大小，而对于Async而言，没有批处理，所以batch=1
+     * ,这里就会导致CuStream的处理是同步的，导致时间叠加
+     */
+
     uint8_t* img_buffer = pool_->Acquire<uint8_t>();
     CudaStreamPtr& cuStream = cuStreams_[img_buffer];
+    // auto cuStream = cuStreamPool_.AcquireUnique();
     
     // LOG_TRACE("element size: {}", backend_->pool_->size());
     TensorBuffer buf = backend_->GetTensorBuffer();
