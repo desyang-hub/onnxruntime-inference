@@ -289,11 +289,11 @@
  
          if (config.export_json) {
              std::string json_path = config.output_dir + "/benchmark_" + timestamp + ".json";
-             ResultReporter::export_json(results, json_path);
+             ResultReporter::export_json(results, config, json_path);
          }
          if (config.export_csv) {
              std::string csv_path = config.output_dir + "/benchmark_" + timestamp + ".csv";
-             ResultReporter::export_csv(results, csv_path);
+             ResultReporter::export_csv(results, config, csv_path);
          }
  
          std::cout << "Benchmark complete.\n";
