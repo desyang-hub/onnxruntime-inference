@@ -2,6 +2,18 @@
 
 基于 ONNXRuntime C++ API 的高性能模型推理框架，支持目标检测与图像修复等多类模型的快速接入与高效推理。
 
+## Benchmark
+
+### 环境
+- 显卡: NVIDIA GeForce RTX 3090
+- Opencv version: 4.6.0
+
+基线测试模型为yolov8n，仅cuda推理，未开启TensorRT，以下为sync、async、batch三种调度器的测试结果，batch设为8，使用[批测脚本](scripts/bench_test.sh)进行测试，并借助[可视化工具](scripts/plot_benchmark.py)进行可视化
+
+![assets/benchmark/dashboard.png](assets/benchmark/dashboard.png)
+![assets/benchmark/latency.png](assets/benchmark/latency.png)
+![assets/benchmark/latency.png](assets/benchmark/throughput.png)
+
 ## ✨ 特性
 
 - **分层架构**：Backend（硬件抽象）→ Runner（模型适配）→ Scheduler（任务调度）三层解耦，新增模型只需实现 `preprocess()` / `postprocess()` 两个函数

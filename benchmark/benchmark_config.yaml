@@ -18,7 +18,7 @@ show_gpu_stats: true
 warmup_count: 5
 test_duration_sec: 10.0
 min_iterations: 5
-concurrent_clients: 100
+concurrent_clients: 8
 
 # ── Per-scheduler model overrides ────────────────────────────
 # Only the fields you set will override the base model config;
