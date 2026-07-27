@@ -124,6 +124,8 @@ set(project_sources
     src/runner/detect/Detector.cpp
     src/runner/image_restoration/Restorer.cpp
     src/runner/image_restoration/NAFNet.cpp
+    src/runner/classify/Classifier.cc
+    src/runner/classify/ResNet.cc
     src/scheduler/stage/Stage.cpp
     src/scheduler/InferenceScheduler.cpp
     src/scheduler/SyncScheduler.cpp
