@@ -18,6 +18,7 @@
 
 #include "TensorBuffer.h"
 #include "device/cuda_utils.h"
+#include "exceptions/utils.h"
 
 /// @brief 后端无关的模型输出容器
 /// 无论底层是 ORT/TRT/RKNN，对外都呈现为命名张量集合
@@ -113,7 +114,7 @@ public:
     }
 
     const TensorBuffer& tensorBuffer() const {
-        if (!is_init_) throw std::runtime_error("backend not init.");
+        if (!is_init_) throw std::runtime_error(MESSAGE_WITH_LOC("backend not init."));
         return tensorBuffer_;
     }
 

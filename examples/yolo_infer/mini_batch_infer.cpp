@@ -10,6 +10,7 @@
 #include "thread/ThreadPool.h"
 #include "logger/logger.h"
 #include "ScopedTimer.h"
+#include "exceptions/utils.h"
 
 class BatchInference {
 private:
@@ -146,8 +147,7 @@ std::future<std::vector<Detection>> BatchInference::submit(const cv::Mat& img) {
         std::lock_guard<std::mutex> lock(mutex_);
 
         if (is_close_) {
-            LOG_DEBUG_LOC("Throw an exception.");
-            throw std::runtime_error("Submit task in BatchInference closed.");
+            throw std::runtime_error(MESSAGE_WITH_LOC("Submit task in BatchInference closed."));
         }
 
         imgs_.push(img);

@@ -16,6 +16,7 @@
 #include "preprocess/utils.h"
 #include "backend/OrtSessionWrapper.h"
 #include "logger/logger.h"
+#include "exceptions/utils.h"
 
 YoloDetector::YoloDetector(const YAML::Node& config) : Detector(config["model"]), config_(config) 
 {
@@ -203,6 +204,10 @@ void YoloDetector::preprocess(const cv::Mat& img, TensorBuffer& buf, int offset)
     uint8_t* img_buffer = pool_->Acquire<uint8_t>();
     CudaStreamPtr& cuStream = cuStreams_[img_buffer];
 
+    if (!img.isContinuous()) {
+        throw std::invalid_argument(MESSAGE_WITH_LOC("Mat must be continuous for linear H2D copy"));
+    }
+
     // // H2D 拷贝原始图（不做任何CPU预处理）
     cudaMemcpyAsync(img_buffer, img.data,
                     img.rows * img.step,
@@ -236,7 +241,7 @@ std::vector<std::vector<Detection>> YoloDetector::postprocess(const ModelOutput&
     if (!tensor_buf.valid() || tensor_buf.shape.size() != 3) {
         LOG_DEBUG("Model output is un valid. tensor_buf.valid: {}, tensor_buf.shape.size: {}", 
             tensor_buf.valid(), tensor_buf.shape.size());
-        throw std::runtime_error("Model output is invalid.");
+        throw std::runtime_error(MESSAGE_WITH_LOC("Model output is invalid."));
     }
 
     float* d_filtered_buffer = d_filtered_buffers_->Acquire();
@@ -364,7 +369,7 @@ std::vector<std::vector<Detection>> YoloDetector::postprocess(const ModelOutput&
     if (!tensor_buf.valid() || tensor_buf.shape.size() != 3) {
         LOG_DEBUG("Model output is un valid. tensor_buf.valid: {}, tensor_buf.shape.size: {}", 
             tensor_buf.valid(), tensor_buf.shape.size());
-        throw std::runtime_error("Model output is invalid.");
+        throw std::runtime_error(MESSAGE_WITH_LOC("Model output is invalid."));
     }
     
     // YOLOv8 输出形状: [1, numAttributes(4+num_classes), numPredictions]

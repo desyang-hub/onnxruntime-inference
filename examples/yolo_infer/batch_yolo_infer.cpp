@@ -12,6 +12,7 @@
 #include <onnxruntime_cxx_api.h>
 #include <chrono>
 #include <cstdlib>  // 必须包含这个头文件
+#include <stdexcept>
 
 #include "runner/detect/YoloDetector.h"
 #include "visual/painter.h"
@@ -19,6 +20,7 @@
 #include "logger/logger.h"
 #include "scheduler/SyncScheduler.h"
 #include "scheduler/AsyncScheduler.h"
+#include "exceptions/utils.h"
 
 int main(int argc, char const *argv[])
 {
@@ -32,6 +34,8 @@ int main(int argc, char const *argv[])
     std::vector<cv::Mat> imgs;
     imgs.reserve(batch);
     size_t cnt = 10;
+
+    LOG_ERROR_LOC("ERR DISCOVER");
 
     std::string img_path = "assets/bus.png";
     try

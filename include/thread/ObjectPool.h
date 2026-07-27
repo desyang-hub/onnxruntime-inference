@@ -6,6 +6,8 @@
 #include <stdexcept>
 #include <condition_variable>
 
+#include "exceptions/utils.h"
+
 template<class T>
 class ObjectPool
 {
@@ -63,7 +65,7 @@ public:
         {
             std::lock_guard<std::mutex> lock(mutex_);
             
-            if (is_close_) throw std::runtime_error("Release resource in stoped!");
+            if (is_close_) throw std::runtime_error(MESSAGE_WITH_LOC("Release resource in stoped!"));
 
             que_.push(p);
         }

@@ -2,6 +2,7 @@
 
 #include "runner/ModelRunner.h"
 #include "backend/OrtSessionWrapper.h"
+#include "exceptions/utils.h"
 
 int ParseBackendTypeFromString(const std::string& backend) {
     if (backend == "onnxruntime") return BACKEND_ONNXRUNTIME;
@@ -18,7 +19,7 @@ ModelRunner::ModelRunner(const YAML::Node& config) {
             backend_ = std::make_unique<OrtSessionWrapper>(config);
             break;
         default:
-            throw std::runtime_error("Model Unsupport");
+            throw std::runtime_error(MESSAGE_WITH_LOC("Model Unsupport"));
     }
 }
 

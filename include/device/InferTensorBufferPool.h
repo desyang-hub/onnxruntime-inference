@@ -11,6 +11,7 @@
 #include <cuda_runtime.h>
 #include "nonecopyable.h"
 #include "logger/logger.h"
+#include "exceptions/utils.h"
 
 /**
  * @brief 推理张量缓存池，管理GPU内存
@@ -43,13 +44,13 @@ public:
           ele_bytes_size_(ele_bytes_size), is_closed_(false), capacity_(ele_size)
     {
         if (ele_size == 0 || ele_bytes_size == 0)
-            throw std::invalid_argument("Pool size and element size must be > 0");
+            throw std::invalid_argument(MESSAGE_WITH_LOC("Pool size and element size must be > 0"));
 
         cudaError_t err = cudaMalloc(&data_, total_bytes_);
         if (err != cudaSuccess || data_ == nullptr) {
             throw std::runtime_error(
-                std::string("cudaMalloc failed in InferTensorBufferPool: ") 
-                + cudaGetErrorString(err));
+                MESSAGE_WITH_LOC(std::string("cudaMalloc failed in InferTensorBufferPool: ") 
+                + cudaGetErrorString(err)));
         }
 
         for (size_t i = 0; i < ele_size; ++i) {
@@ -89,8 +90,7 @@ public:
                 return;
             }
             if (!owns(ptr)) {
-                LOG_ERROR("Release: pointer not owned by this pool! Ignoring. ptr: {}", fmt::ptr(ptr));
-                throw std::runtime_error("Release not owned py this poll!");
+                throw std::runtime_error(MESSAGE_WITH_LOC("Release not owned py this poll!"));
             }
             buffer_.push(ptr);
         }

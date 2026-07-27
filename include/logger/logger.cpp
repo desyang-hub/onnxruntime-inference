@@ -76,14 +76,14 @@ void Init(LoggerLevel log_level,
     sinks.push_back(console_sink);
 
     if (!log_file.empty()) {
-    try {
-        auto file_sink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(
-            log_file, max_file_size, max_files);
-        file_sink->set_level(spd_log_level); // ✅ 文件 sink 同理
-        sinks.push_back(file_sink);
-    } catch (const spdlog::spdlog_ex& ex) {
-        fprintf(stderr, "[Logger] File sink failed: %s\n", ex.what());
-    }
+        try {
+            auto file_sink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(
+                log_file, max_file_size, max_files);
+            file_sink->set_level(spd_log_level); // ✅ 文件 sink 同理
+            sinks.push_back(file_sink);
+        } catch (const spdlog::spdlog_ex& ex) {
+            fprintf(stderr, "[Logger] File sink failed: %s\n", ex.what());
+        }
     }
 
     lgr->sinks() = std::move(sinks);

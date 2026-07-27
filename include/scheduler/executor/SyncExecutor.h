@@ -9,6 +9,7 @@
 #include "Executor.h"
 #include "thread/ThreadSafeQueue.h"
 #include "logger/logger.h"
+#include "exceptions/utils.h"
 
 /// @brief 同步执行器 `内部所有的任务都将在一个线程中先后执行`
 class SyncExecutor : public Executor
@@ -68,7 +69,7 @@ public:
         {
             std::lock_guard<std::mutex> lock(que_mutex_);
             if (is_close) {
-                throw std::runtime_error("submit in exector stoped.");
+                throw std::runtime_error(MESSAGE_WITH_LOC("submit in exector stoped."));
             }
 
             tasks_.push(std::move(f));

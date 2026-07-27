@@ -10,6 +10,7 @@
 #include "stage/Stage.h"
 #include "logger/logger.h"
 #include "runner/ModelRunner.h"
+#include "exceptions/utils.h"
 
 static constexpr int kTimeoutMiliSeconds = 5; // ms
 
@@ -191,8 +192,7 @@ public:
         {
             std::lock_guard<std::mutex> lock(mutex_);
             if (is_close_) {
-                LOG_DEBUG("submit Task in Scheduler quit!");
-                throw std::runtime_error("submit Task in Scheduler quit!");
+                throw std::runtime_error(MESSAGE_WITH_LOC("submit Task in Scheduler quit!"));
             }
 
             inputs_.push(input);

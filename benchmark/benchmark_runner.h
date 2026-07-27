@@ -21,6 +21,7 @@
 #include "scheduler/type_trait/runner_type_trait.h"
 #include "logger/logger.h"
 #include "device/cuda_utils.h"
+#include "exceptions/utils.h"
 
 #ifdef ENABLE_CUDA
 #include "scheduler/BatchScheduler.h"
@@ -326,7 +327,7 @@ public:
     {
         auto test_img = cv::imread(config.image_path);
         if (test_img.empty()) {
-            throw std::runtime_error("Cannot load benchmark image: " + config.image_path);
+            throw std::runtime_error(MESSAGE_WITH_LOC("Cannot load benchmark image: " + config.image_path));
         }
 
         YAML::Node node = apply_override(base_config, config.sync_override);
@@ -344,7 +345,7 @@ public:
     {
         auto test_img = cv::imread(config.image_path);
         if (test_img.empty()) {
-            throw std::runtime_error("Cannot load benchmark image: " + config.image_path);
+            throw std::runtime_error(MESSAGE_WITH_LOC("Cannot load benchmark image: " + config.image_path));
         }
 
         YAML::Node node = apply_override(base_config, config.async_override);
@@ -363,7 +364,7 @@ public:
     {
         auto test_img = cv::imread(config.image_path);
         if (test_img.empty()) {
-            throw std::runtime_error("Cannot load benchmark image: " + config.image_path);
+            throw std::runtime_error(MESSAGE_WITH_LOC("Cannot load benchmark image: " + config.image_path));
         }
 
         YAML::Node node = apply_override(base_config, config.batch_override);

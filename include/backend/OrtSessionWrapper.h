@@ -25,6 +25,7 @@
 #include "logger/logger.h"
 #include "ScopedTimer.h"
 #include "device/cuda_utils.h"
+#include "exceptions/utils.h"
 
 GraphOptimizationLevel ParseGraphOptimizationLevel(const std::string &level);
 ExecutionMode ParseExecutionMode(const std::string &mode);
@@ -194,7 +195,7 @@ public:
                 // 1. 获取全局 C API 指针（所有版本都有这个函数）
                 const OrtApi* ort_api = OrtGetApiBase()->GetApi(ORT_API_VERSION);
                 if (!ort_api) {
-                    throw std::runtime_error("Failed to get ONNX Runtime C API");
+                    throw std::runtime_error(MESSAGE_WITH_LOC("Failed to get ONNX Runtime C API"));
                 }
         
                 // 2. 创建 V2 Options
@@ -234,7 +235,7 @@ public:
                     std::string err = ort_api->GetErrorMessage(status);
                     ort_api->ReleaseStatus(status);
                     ort_api->ReleaseTensorRTProviderOptions(trt_opts);
-                    throw std::runtime_error("UpdateTensorRTProviderOptions failed: " + err);
+                    throw std::runtime_error(MESSAGE_WITH_LOC("UpdateTensorRTProviderOptions failed: " + err));
                 }
         
                 // 4. 挂载到 C++ SessionOptions（C/C++ 混合调用关键步骤）
@@ -300,7 +301,7 @@ public:
             }
             else if (!fs::exists(model_path))
             {
-                throw std::runtime_error("Model not found: " + model_path);
+                throw std::runtime_error(MESSAGE_WITH_LOC("Model not found: " + model_path));
             }
         }
 
@@ -311,7 +312,7 @@ public:
         }
         catch (const std::exception &e)
         {
-            throw std::runtime_error("OrtSession create failed! " + std::string(e.what()));
+            throw std::runtime_error(MESSAGE_WITH_LOC("OrtSession create failed! " + std::string(e.what())));
         }
 
         // 获取当前推理设备信息
@@ -491,8 +492,8 @@ public:
             gpu_output_buffer_->Release(data);
 
             // 初始化流
-            cudaStream_t cu_stream{};
-            cudaStreamCreate(&cu_stream);
+            // cudaStream_t cu_stream{};
+            // cudaStreamCreate(&cu_stream);
             // cuStreams_[data].reset(cu_stream);
         }
 #endif
@@ -511,7 +512,7 @@ public:
     ModelOutput infer(const TensorBuffer& tenbuf) override {
 
         if (input_tensors_.find(tenbuf.data) == input_tensors_.end()) {
-            throw std::runtime_error("not found");
+            throw std::runtime_error(MESSAGE_WITH_LOC("not found"));
         }
         
         auto& input_tensor = input_tensors_.at(tenbuf.data);
@@ -570,8 +571,7 @@ public:
             output_buffer_ptr = gpu_output_buffer_->Acquire();
             
             if (output_tensors_.find(output_buffer_ptr) == output_tensors_.end()) {
-                LOG_DEBUG_LOC("output buffer not found!");
-                throw std::runtime_error("output buffer not found!");
+                throw std::runtime_error(MESSAGE_WITH_LOC("output buffer not found!"));
             }
             auto& output_tensor = output_tensors_.at(output_buffer_ptr);
             LOG_DEBUG("output tensor valid: {}", output_tensor.IsTensor());

@@ -1,4 +1,5 @@
 #include "preprocess/utils.h"
+#include "exceptions/utils.h"
 
 /// @return scale_factor: 实际缩放比例（后处理坐标还原必需）
 LetterboxParams letterbox_resize(
@@ -127,9 +128,9 @@ LetterboxParams pad_to_size(const cv::Mat& img,
     // 防御性检查：目标尺寸不能小于原图
     if (size.width < img.cols || size.height < img.rows) {
         throw std::invalid_argument(
-            "pad_to_size: target size (" + std::to_string(size.width) + "x" +
+            MESSAGE_WITH_LOC("pad_to_size: target size (" + std::to_string(size.width) + "x" +
             std::to_string(size.height) + ") is smaller than input (" +
-            std::to_string(img.cols) + "x" + std::to_string(img.rows) + ")");
+            std::to_string(img.cols) + "x" + std::to_string(img.rows) + ")"));
     }
 
     // 已经匹配，无需填充

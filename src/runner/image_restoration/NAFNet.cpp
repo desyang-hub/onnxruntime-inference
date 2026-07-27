@@ -5,6 +5,7 @@
 #include "preprocess/utils.h"
 #include "runner/image_restoration/NAFNet.h"
 #include "logger/logger.h"
+#include "exceptions/utils.h"
 
 NAFNet::NAFNet(const YAML::Node& config) : Restorer(config["model"]) {
     padder_size_ = config["model"]["padder_size"].as<size_t>(16);
@@ -77,8 +78,7 @@ void NAFNet::preprocess(const cv::Mat& img, TensorBuffer& tenbuf, int offset) {
     // BGR → RGB, HWC → CHW, uint8 [0,255] → float32 [0,1]
 
     if (!tenbuf.valid()) {
-        LOG_DEBUG("benbuf is invalid!");
-        throw std::runtime_error("benbuf is invalid!");
+        throw std::runtime_error(MESSAGE_WITH_LOC("benbuf is invalid!"));
     }
 
     LOG_TRACE("tenbuf data ptr: {}", fmt::ptr(tenbuf.data));

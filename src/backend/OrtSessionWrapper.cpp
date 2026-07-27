@@ -7,6 +7,7 @@
  * @LastEditTime : 2026-07-03 10:49:58
 **/
 #include "backend/OrtSessionWrapper.h"
+#include "exceptions/utils.h"
 
 // ==================== GraphOptimizationLevel ====================
 static const std::unordered_map<std::string, GraphOptimizationLevel> kOptLevelMap = {
@@ -21,7 +22,7 @@ GraphOptimizationLevel ParseGraphOptimizationLevel(const std::string& level) {
     if (it != kOptLevelMap.end()) {
         return it->second;
     }
-    throw std::runtime_error("Unknow graph optimization level: " + level);
+    throw std::runtime_error(MESSAGE_WITH_LOC("Unknow graph optimization level: " + level));
 }
 
 // ==================== ExecutionMode ====================
@@ -35,7 +36,7 @@ ExecutionMode ParseExecutionMode(const std::string& mode) {
     if (it != kExecutionModeMap.end()) {
         return it->second;
     }
-    throw std::invalid_argument("Unknown execution mode: " + mode);
+    throw std::invalid_argument(MESSAGE_WITH_LOC("Unknown execution mode: " + mode));
 }
 
 // ==================== LogSeverityLevel ====================
@@ -52,15 +53,15 @@ OrtLoggingLevel ParseLogSeverityLevel(const std::string& level) {
     if (it != kLogSeverityMap.end()) {
         return it->second;
     }
-    throw std::invalid_argument("Unknown log severity level: " + level);
+    throw std::invalid_argument(MESSAGE_WITH_LOC("Unknown log severity level: " + level));
 }
 
 
 // (b, c, h, w)
 std::vector<int64_t> parse_input_meta(const std::vector<int64_t>& shape, const std::vector<int64_t>& img_shape) {
     if (shape.size() != 4) {
-        throw std::runtime_error("Expected 4D input, got " 
-                                 + std::to_string(shape.size()) + "D");
+        throw std::runtime_error(MESSAGE_WITH_LOC("Expected 4D input, got " 
+                                 + std::to_string(shape.size()) + "D"));
     }
 
     std::vector<int64_t> infer_shape(shape.size());
@@ -75,11 +76,11 @@ std::vector<int64_t> parse_input_meta(const std::vector<int64_t>& shape, const s
         infer_shape = {shape[0], shape[3], shape[1], shape[2]};
     } else {
         throw std::runtime_error(
-            "Cannot determine layout: no dimension equals 1/3/4. "
+            MESSAGE_WITH_LOC("Cannot determine layout: no dimension equals 1/3/4. "
             "Shape: [" + std::to_string(shape[0]) + ", " 
                         + std::to_string(shape[1]) + ", " 
                         + std::to_string(shape[2]) + ", " 
-                        + std::to_string(shape[3]) + "]");
+                        + std::to_string(shape[3]) + "]"));
     }
 
     // 动态维度 (-1, 3, -1, -1)
