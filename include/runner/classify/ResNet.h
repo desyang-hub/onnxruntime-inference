@@ -8,7 +8,9 @@
 class ResNet : public Classifier
 {
 private:
+#ifdef ENABLE_CUDA
     CudaStream stream_;
+#endif
     
 public:
     ResNet(const YAML::Node& config);
