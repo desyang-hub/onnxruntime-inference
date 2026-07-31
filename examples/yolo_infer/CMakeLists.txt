@@ -62,6 +62,14 @@ if(ENABLE_CUDA)
     target_link_libraries(scheduler_infer
         ${INFER_LIB}
     )
+
+    add_executable(onnx_run
+        onnx_run.cpp
+    )
+
+    target_link_libraries(onnx_run
+        ${INFER_LIB}
+    )
 endif()
 
 # target_compile_options(mini_batch_infer PRIVATE -fsanitize=address -fno-omit-frame-pointer -O1)

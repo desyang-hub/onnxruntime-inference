@@ -11,5 +11,9 @@
 #include "gpu_preprocess.h"
 #include "gpu_filter.h"
 
+#include "macor.h"
+#include "CudaStream.h"
+#include "CudaEvent.h"
+#include "CudaMallocGuard.h"
 
 #endif

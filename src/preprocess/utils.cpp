@@ -9,6 +9,7 @@ LetterboxParams letterbox_resize(
     bool auto_aspect_ratio,
     cv::Scalar pad_color)
 {
+    assert(img.cols != 0 && img.rows != 0);
     // ⭐ 1. 计算缩放因子：取 min 保证图像完整放入目标尺寸
     float x_factor = static_cast<float>(target_size.width)  / img.cols;
     float y_factor = static_cast<float>(target_size.height) / img.rows;

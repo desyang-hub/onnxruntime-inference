@@ -264,7 +264,7 @@ public:
                                          cuda_provider) != execute_providers.end();
 
         // 目标设备可用
-        if (isCudaAvailable)
+        if (isCudaAvailable && !isTensorRTAvailable)
         {
             try
             {
@@ -281,6 +281,7 @@ public:
             catch (const std::exception &e)
             {
                 LOG_WARN("[EP] CUDA unavailable: {}", e.what());
+                isCudaAvailable = false;
             }
         }
 #endif
