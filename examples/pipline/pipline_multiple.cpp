@@ -4,26 +4,29 @@
 
 #include "pipline/PipLine.h"
 #include "ScopedTimer.h"
+#include "pipline/SafeQueuePipLine.h"
 
 int main(int argc, char const *argv[])
 {
     std::string config_path = "config/model_config.yaml";
     std::string img_path = "assets/bus.png";
 
+    using PipLineType = SafeQueuePipLine;
+
     cv::Mat img = cv::imread(img_path);
     auto config = YAML::LoadFile(config_path);
-    PipLine detector(config);
+    PipLineType detector(config);
 
     int instance = 1;
     int num = 1000;
 
     Ort::Env env(ORT_LOGGING_LEVEL_ERROR, "pipline");
 
-    std::vector<std::unique_ptr<PipLine>> piplines;
+    std::vector<std::unique_ptr<PipLineType>> piplines;
     piplines.reserve(instance);
 
     for (int i = 0; i < instance; ++i) {
-        piplines.push_back(std::make_unique<PipLine>(config, env));
+        piplines.push_back(std::make_unique<PipLineType>(config, env));
     }
 
     std::vector<std::future<std::vector<Detection>>> futs;
