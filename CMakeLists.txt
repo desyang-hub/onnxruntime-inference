@@ -130,6 +130,7 @@ set(project_sources
     src/scheduler/InferenceScheduler.cpp
     src/scheduler/SyncScheduler.cpp
     src/scheduler/AsyncScheduler.cpp
+    src/pipline/GPUBuffer.cpp
 )
 
 if(ENABLE_CUDA)

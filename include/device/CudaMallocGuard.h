@@ -15,14 +15,29 @@ public:
     CudaMallocGuard() : gpu_ptr_{} {
     }
 
+    ~CudaMallocGuard() {
+        CUDA_CHECK(cudaFree(gpu_ptr_));
+    }
+
+    CudaMallocGuard(const CudaMallocGuard&) = delete;
+    CudaMallocGuard& operator=(const CudaMallocGuard&) = delete;
+
+    CudaMallocGuard(CudaMallocGuard&& rch) noexcept : gpu_ptr_(rch.gpu_ptr_) {
+        gpu_ptr_ = nullptr;
+    }
+
+    CudaMallocGuard& operator=(CudaMallocGuard&& rch) noexcept {
+        gpu_ptr_ = rch.gpu_ptr_;
+        rch.gpu_ptr_ = nullptr;
+        return *this;
+    }
+
     void cuMalloc(size_t bytes_size) {
         if (gpu_ptr_) throw std::runtime_error(MESSAGE_WITH_LOC("Repeat cudaMalloc"));
         CUDA_CHECK(cudaMalloc(&gpu_ptr_, bytes_size));
     }
 
-    ~CudaMallocGuard() {
-        CUDA_CHECK(cudaFree(gpu_ptr_));
-    }
+
 
     template<class T = float>
     T* get() {

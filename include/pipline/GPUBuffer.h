@@ -6,6 +6,9 @@
 #include "BufferState.h"
 #include "logger/logger.h"
 
+class TaskContext;
+
+
 struct GPUBuffer {
     // 配对管理
     CudaMallocGuard g_input;
@@ -19,6 +22,8 @@ struct GPUBuffer {
         g_input(input_bytes_size),
         g_output(output_bytes_size) {
     }
+
+    GPUBuffer(const TaskContext& context);
     
     std::atomic<BufferState> state{BufferState::IDLE};
     

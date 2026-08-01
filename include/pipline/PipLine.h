@@ -188,22 +188,7 @@ private:
             h_inputs_.push(std::make_shared<CPUBuffer>(context_.num_input_bytes_size));
             h_outputs_.push(std::make_shared<CPUBuffer>(context_.num_output_bytes_size));
 
-            d_buffers_.push(std::make_shared<GPUBuffer>(context_.num_input_bytes_size, context_.num_output_bytes_size));
-            d_buffers_.back()->input_tensor = Ort::Value::CreateTensor<float>(
-                context_.active_mem_info,
-                d_buffers_.back()->g_input.get(),
-                context_.num_input_elements,
-                context_.input_shape.data(),
-                context_.input_shape.size()
-            );
-            d_buffers_.back()->output_tensor = Ort::Value::CreateTensor<float>(
-                context_.active_mem_info,
-                d_buffers_.back()->g_output.get(),
-                context_.num_output_elements,
-                context_.output_shape.data(),
-                context_.output_shape.size()
-            );
-            
+            d_buffers_.push(std::make_shared<GPUBuffer>(context_));
         }
     }
 
