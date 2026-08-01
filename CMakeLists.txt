@@ -137,6 +137,8 @@ if(ENABLE_CUDA)
     set(project_device_sources 
         src/device/gpu_preprocess.cu
         src/device/gpu_filter.cu
+        src/kernels/yolo/preprocess.cu
+        src/kernels/yolo/postprocess.cu
     )
 
     set(project_device_cpp

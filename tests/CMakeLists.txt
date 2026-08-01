@@ -22,7 +22,15 @@ add_executable(concurrent_queue_test
     concurrent_queue_test.cpp
 )
 
-target_link_libraries(
-    concurrent_queue_test
+target_link_libraries(concurrent_queue_test
+    ${INFER_LIB}
+)
+
+add_executable(kernel_test
+    kernel_test.cpp
+)
+
+
+target_link_libraries(kernel_test
     ${INFER_LIB}
 )

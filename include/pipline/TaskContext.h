@@ -40,6 +40,7 @@ struct TaskContext
     cv::Size img_size;
     bool auto_aspect_ratio{true};
     float norm_scale{1.0f/255.0f};
+    int pad_value{127};
     bool bgr2rgb{true};
 
     size_t num_input_elements{0};
@@ -48,6 +49,7 @@ struct TaskContext
     size_t num_output_bytes_size{0};// * sizeof(flaot)
 
     size_t num_predictions{0};
+    size_t num_attributes{0};
     size_t num_classes{0};
     size_t batch_size;
     size_t output_plane_size; // total_elements / batch_size
@@ -66,6 +68,7 @@ struct TaskContext
     int warm_up_num{3};
 
     int buffer_size{1};
+    int stride{32};
     
     TaskContext(const YAML::Node& config, 
         const Ort::Env& env, cudaStream_t user_compute_stream=nullptr) : 
@@ -407,7 +410,8 @@ struct TaskContext
         num_output_bytes_size = num_output_elements * sizeof(float);
 
         num_predictions = output_shape[2];
-        num_classes = output_shape[1] - 4;
+        num_attributes = output_shape[1];
+        num_classes = num_attributes - 4;
         output_plane_size = num_output_elements / batch_size;
     }
 
