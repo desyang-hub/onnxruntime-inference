@@ -4,23 +4,54 @@
 #include "kernels/yolo/preprocess.cuh"
 #include "kernels/yolo/postprocess.cuh"
 
+#include <stdexcept>
+#include "exceptions/utils.h"
+
 // kernel下
-class BenchKernel : public Bench
+class BenchKernelBatch : public Bench
 {
-    const int kAttributeSize{6}; // x, y, w, h, class_id, score,
+    const int kAttributeSize{6}; // x, y, w, h, class_id, score
+    const int kMaxImage{1024ULL * 1024 * 3}; // h * w * channels
 
     CudaMallocGuard<float> d_output_;
     CudaMallocGuard<int> d_counts_;
+    CudaMallocGuard<uint8_t> gpu_rgb_srcs_;
+    CudaMallocGuard<size_t> gpu_img_offsets_;
+    CudaMallocGuard<float> dest_nchw_ptr_;
     std::unique_ptr<int[]> h_counts_;
-    
+    std::unique_ptr<size_t[]> cpu_img_offsets_;
+
+    std::vector<ImageMeta> imgMetas_;
+    CudaMallocGuard<ImageMeta> gpu_imgMetas_;
+    std::vector<LetterboxParams> letterbox_params_;
 
 public:
-    BenchKernel(const YAML::Node& config) : 
+    BenchKernelBatch(const YAML::Node& config) : 
         Bench(config),
         // batch * max_detections * 6 // batch 最大目标数量 * 类别数量
         d_output_(context_.batch_size * context_.max_detections * kAttributeSize),
         d_counts_(context_.batch_size),
-        h_counts_(std::make_unique<int[]>(context_.batch_size)) {
+        gpu_rgb_srcs_(context_.batch_size * kMaxImage),  ///////////////////////////
+        gpu_img_offsets_(context_.batch_size),
+        h_counts_(std::make_unique<int[]>(context_.batch_size)), 
+        cpu_img_offsets_(std::make_unique<size_t[]>(context_.batch_size)),
+        imgMetas_(context_.batch_size),
+        gpu_imgMetas_(context_.batch_size),
+        letterbox_params_(context_.batch_size) {
+    }
+
+    BenchKernelBatch(TaskContext&& context) : 
+        Bench(std::move(context)),
+        d_output_(context_.batch_size * context_.max_detections * kAttributeSize),
+        d_counts_(context_.batch_size),
+        gpu_rgb_srcs_(context_.batch_size * kMaxImage),  ///////////////////////////
+        gpu_img_offsets_(context_.batch_size),
+        h_counts_(std::make_unique<int[]>(context_.batch_size)), 
+        cpu_img_offsets_(std::make_unique<size_t[]>(context_.batch_size)),
+        imgMetas_(context_.batch_size),
+        gpu_imgMetas_(context_.batch_size),
+        letterbox_params_(context_.batch_size) {
+
     }
 
     LetterboxParams preprocess(const cv::Mat& img) override {
@@ -60,66 +91,127 @@ public:
         return LetterboxParams{scale, pad_left, pad_top, img.cols, img.rows};
     }
 
+#define LUNCH_BATCH_PREPROCESS(max_batch)   \
+    launchBatchPreprocess<max_batch>(   \
+        gpu_rgb_srcs_.get(),   \
+        gpu_img_offsets_.get(), \
+        gpu_imgMetas_.get(), \
+        batch,  \
+        d_buffer_.g_input.get(),    \
+        context_.img_size.height,   \
+        context_.img_size.width,    \
+        context_.norm_scale,    \
+        context_.pad_value, \
+        0   \
+    );
 
-    // std::vector<LetterboxParams> preprocess(const std::vector<cv::Mat>& imgs) {
 
-    //     int batch = imgs.size();
-    //     std::vector<LetterboxParams> params_arry(batch);
-    //     std::vector<ImageMeta> imgMetas(batch);
+    std::vector<LetterboxParams> preprocess(const std::vector<cv::Mat>& imgs) {
+        int batch = imgs.size();
+        assert(batch <= context_.batch_size && "batch infer mini batch must <= batch_size");
+        
+        size_t offset = 0;
 
-    //     for (int i = 0; i < batch; ++i) {
-    //         const auto& img = imgs[i];
+        std::vector<LetterboxParams> letterbox_params(batch);
 
-    //         // CPU上计算参数，并将数据移动到GPU上
-    //         float scale_h = static_cast<float>(context_.img_size.height) / img.rows;
-    //         float scale_w = static_cast<float>(context_.img_size.width) / img.cols;
+        // 在循环开始前，将所有图像转换为连续内存
+        std::vector<cv::Mat> continuous_imgs;
+        continuous_imgs.reserve(imgs.size());
 
-    //         float scale = std::min(scale_h, scale_w);
-    //         int new_h = static_cast<int>(std::round(scale * img.rows));
-    //         int new_w = static_cast<int>(std::round(scale * img.cols));
+        for (const auto& img : imgs) {
+            if (img.isContinuous()) {
+                continuous_imgs.push_back(img);
+            } else {
+                continuous_imgs.push_back(img.clone());
+            }
+        }
+                
 
-    //         new_h -= (new_h % context_.stride);
-    //         new_w -= (new_w % context_.stride);
+        for (int i = 0; i < batch; ++i) {
+            const auto& img = imgs[i];
 
-    //         scale = std::min(static_cast<float>(new_w) / img.cols,
-    //                 static_cast<float>(new_h) / img.rows);
+            // CPU上计算参数，并将数据移动到GPU上
+            float scale_h = static_cast<float>(context_.img_size.height) / img.rows;
+            float scale_w = static_cast<float>(context_.img_size.width) / img.cols;
 
-    //         int pad_left = (context_.img_size.width - new_w) / 2;
-    //         int pad_top = (context_.img_size.height - new_h) / 2;
+            float scale = std::min(scale_h, scale_w);
+            int new_h = static_cast<int>(std::round(scale * img.rows));
+            int new_w = static_cast<int>(std::round(scale * img.cols));
 
-    //         imgMetas[i].src_h = img.rows;
-    //         imgMetas[i].src_w = img.cols;
-    //         imgMetas[i].src_step = img.step;
-    //         imgMetas[i].right_bt_x = pad_left + new_w;
-    //         imgMetas[i].right_bt_y = pad_top + new_h;
-    //         imgMetas[i].scale = scale;
-    //         imgMetas[i].pad_left = pad_left;
-    //         imgMetas[i].pad_top = pad_top;
+            new_h -= (new_h % context_.stride);
+            new_w -= (new_w % context_.stride);
 
-            
-    //     }
+            scale = std::min(static_cast<float>(new_w) / img.cols,
+                    static_cast<float>(new_h) / img.rows);
 
-    //     // CPU计算好参数将数据传入GPU
-    //     cudaMemcpyAsync(gpu_store.get(), img.data, img.rows * img.step, cudaMemcpyHostToDevice);
+            int pad_left = (context_.img_size.width - new_w) / 2;
+            int pad_top = (context_.img_size.height - new_h) / 2;
 
-    //     // 在GPU上运行预处理，并将结果输出到GPU Buffer
-    //     lunchPreprocess(
-    //         gpu_store.get(),
-    //         d_buffer_.g_input.get(),
-    //         img.rows, img.cols, img.step,
-    //         new_h, new_w,
-    //         context_.img_size.height, context_.img_size.width,
-    //         scale, pad_left, pad_top,
-    //         context_.norm_scale, context_.pad_value
-    //     );
+            imgMetas_[i].src_h = img.rows;
+            imgMetas_[i].src_w = img.cols;
+            imgMetas_[i].src_step = img.step;
+            imgMetas_[i].right_bt_x = pad_left + new_w;
+            imgMetas_[i].right_bt_y = pad_top + new_h;
+            imgMetas_[i].scale = scale;
+            imgMetas_[i].pad_left = pad_left;
+            imgMetas_[i].pad_top = pad_top;
 
-    //     CUDA_CHECK(cudaStreamSynchronize(0));
+            letterbox_params[i].scale = scale;
+            letterbox_params[i].orig_h = img.rows;
+            letterbox_params[i].orig_w = img.cols;
+            letterbox_params[i].pad_left = pad_left;
+            letterbox_params[i].pad_top = pad_top;
 
-    //     return params_arry;
-    // }
+            LOG_TRACE("position: {}", offset + img.rows * img.step);
+
+            // CPU计算好参数将数据传入GPU
+            cudaMemcpyAsync(gpu_rgb_srcs_.get() + offset, img.data, img.rows * img.step, cudaMemcpyHostToDevice);
+            cpu_img_offsets_[i] = offset;
+            LOG_TRACE("offset: {}", offset);
+
+            offset += (img.rows * img.step); // 修改偏移量
+        }
+        LOG_TRACE("MAX POSITION: {}", context_.batch_size * kMaxImage);
+
+        // 拷贝offsets 到gpu
+        cudaMemcpyAsync(
+            gpu_img_offsets_.get(), 
+            cpu_img_offsets_.get(), 
+            batch * sizeof(size_t), 
+            cudaMemcpyHostToDevice
+        );
+        CUDA_CHECK(cudaStreamSynchronize(0));
+
+        cudaMemcpyAsync(
+            gpu_imgMetas_.get(), 
+            imgMetas_.data(),
+            batch * sizeof(ImageMeta), 
+            cudaMemcpyHostToDevice
+        );
+        CUDA_CHECK(cudaStreamSynchronize(0));
+
+        if (context_.batch_size <= 1) {
+            LUNCH_BATCH_PREPROCESS(1);
+        } else if (context_.batch_size <= 2) {
+            LUNCH_BATCH_PREPROCESS(2);
+        } else if (context_.batch_size <= 4) {
+            LUNCH_BATCH_PREPROCESS(4);
+        } else if (context_.batch_size <= 8) {
+            LUNCH_BATCH_PREPROCESS(8);
+        } else if (context_.batch_size <= 16) {
+            LUNCH_BATCH_PREPROCESS(16);
+        } else {
+            throw std::runtime_error(MESSAGE_WITH_LOC("batch size has exceed 16 !!!"));
+        }
+
+        CUDA_CHECK(cudaStreamSynchronize(0));
+
+        return letterbox_params;
+    }
 
 
     void infer() override {
+
         // kernel 过程
         context_.session->Run(
             Ort::RunOptions{}, 
@@ -145,6 +237,8 @@ public:
             context_.max_detections,
             0
         );
+
+        CUDA_CHECK(cudaStreamSynchronize(0));
 
         // ========== Step 2: D2H 拷贝计数 ==========
         cudaMemcpyAsync(h_counts_.get(), d_counts_.get(), batch * sizeof(int), cudaMemcpyDeviceToHost, 0);
@@ -230,4 +324,18 @@ public:
     }
 
 
+    std::vector<std::vector<Detection>> batch_detect(const std::vector<cv::Mat>& imgs) override {
+        // 预处理
+        std::vector<LetterboxParams> params = preprocess(imgs);
+
+        // 推理
+        infer();
+
+        CUDA_CHECK(cudaStreamSynchronize(0));
+
+        // 后处理
+        auto res = postprocess(params);
+
+        return res;
+    }
 };

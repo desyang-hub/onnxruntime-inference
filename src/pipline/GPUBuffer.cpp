@@ -3,8 +3,8 @@
 #include "pipline/TaskContext.h"
 
 GPUBuffer::GPUBuffer(const TaskContext& context) :
-    g_input(context.num_input_bytes_size),
-    g_output(context.num_output_bytes_size) {
+    g_input(context.num_input_elements),
+    g_output(context.num_output_elements) {
 
     input_tensor = Ort::Value::CreateTensor<float>(
         context.active_mem_info,

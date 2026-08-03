@@ -194,7 +194,7 @@ private:
             h_inputs_.push(std::make_shared<CPUBuffer>(context_.num_input_bytes_size));
             h_outputs_.push(std::make_shared<CPUBuffer>(context_.num_output_bytes_size));
 
-            auto d_buffer = std::make_shared<GPUBuffer>(context_.num_input_bytes_size, context_.num_output_bytes_size);
+            auto d_buffer = std::make_shared<GPUBuffer>(context_.num_input_elements, context_.num_output_elements);
 
             d_buffer->input_tensor = Ort::Value::CreateTensor<float>(
                 context_.active_mem_info,
