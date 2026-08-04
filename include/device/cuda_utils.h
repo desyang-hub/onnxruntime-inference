@@ -15,5 +15,6 @@
 #include "CudaStream.h"
 #include "CudaEvent.h"
 #include "CudaMallocGuard.h"
+#include "CudaMallocHostGuard.h"
 
 #endif

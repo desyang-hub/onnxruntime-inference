@@ -85,6 +85,23 @@ public:
         }
     }
 
+    T pop() {
+        std::unique_lock<std::mutex> lock(mutex_);
+        not_empty_.wait(lock, [this]{
+            return !que_.empty() || is_close_;
+        });
+
+        if (!que_.empty()) {
+            T item = std::move(que_.front());
+            que_.pop();
+            not_full_.notify_one();
+            return item;
+        }
+        else if (is_close_) {
+            return;
+        }
+    }
+
     bool try_pop(T& item) {
         std::lock_guard<std::mutex> lock(mutex_);
         if (!que_.empty()) {

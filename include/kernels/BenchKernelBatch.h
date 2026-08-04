@@ -10,14 +10,13 @@
 // kernel下
 class BenchKernelBatch : public Bench
 {
-    const int kAttributeSize{6}; // x, y, w, h, class_id, score
-    const int kMaxImage{1024ULL * 1024 * 3}; // h * w * channels
+    static constexpr int kAttributeSize{6}; // x, y, w, h, class_id, score
+    static constexpr int kMaxImage{1024ULL * 1024 * 3}; // h * w * channels
 
     CudaMallocGuard<float> d_output_;
     CudaMallocGuard<int> d_counts_;
     CudaMallocGuard<uint8_t> gpu_rgb_srcs_;
     CudaMallocGuard<size_t> gpu_img_offsets_;
-    CudaMallocGuard<float> dest_nchw_ptr_;
     std::unique_ptr<int[]> h_counts_;
     std::unique_ptr<size_t[]> cpu_img_offsets_;
 

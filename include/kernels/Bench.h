@@ -13,13 +13,14 @@
 #include "preprocess/utils.h"
 #include "ScopedTimer.h"
 #include "exceptions/utils.h"
+#include "IBench.h"
 
 // kernel下
-class Bench
+class Bench : public IBench
 {
 protected:
     // 最大支持图像的大小
-    const size_t kMaxImageTotalElements{1024 * 1024 * 3};
+    static constexpr size_t kMaxImageTotalElements{1024 * 1024 * 3};
 
     Ort::Env env_;
     TaskContext context_;
@@ -44,39 +45,6 @@ public:
         d_buffer_(context_),
         h_input_(context_.num_input_bytes_size),
         h_output_(context_.num_output_bytes_size) {
-
-    }
-
-    virtual LetterboxParams preprocess(const cv::Mat& img) = 0;
-
-    virtual void infer() = 0;
-
-    // yolo后处理
-    virtual std::vector<std::vector<Detection>> postprocess(const std::vector<LetterboxParams>& params) = 0;
-
-    std::vector<Detection> detect(const cv::Mat& img) {
-        std::vector<LetterboxParams> params;
-        // ScopedTimer st("pre");
-        auto param = preprocess(img);
-        // auto param = preprocess(img, h_input_.data());
-        // LOG_INFO("pre time: {}", st.elapsed_ms());
-
-        params.push_back(std::move(param));
-
-        // ScopedTimer st1("infer");
-        infer();
-        // LOG_INFO("kernel time: {}", st1.elapsed_ms());
-        cudaStreamSynchronize(0);
-        
-        // ScopedTimer st2("infer");
-        auto res = postprocess(params);
-        // LOG_INFO("post time: {}", st2.elapsed_ms());
-        // LOG_INFO("res size: {}", res.size());
-
-        return res[0];
-    }
-
-    virtual std::vector<std::vector<Detection>> batch_detect(const std::vector<cv::Mat>& img) {
-        throw std::runtime_error(MESSAGE_WITH_LOC("Method detect(imgs) UnImplement!"));
+        context_.warm_up(d_buffer_);
     }
 };

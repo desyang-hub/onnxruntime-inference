@@ -19,6 +19,8 @@
 
 struct TaskContext
 {
+    Ort::RunOptions run_options{};
+
     // session
     std::unique_ptr<Ort::Session> session;
 
@@ -81,6 +83,9 @@ struct TaskContext
     /// @param config 配置项目
     /// @param env Ort::Env
     void init(const YAML::Node& config, const Ort::Env& env) {
+        // 设置有效的日志级别
+        run_options.SetRunLogSeverityLevel(ORT_LOGGING_LEVEL_WARNING);  
+
         // Ort::SessionOptions 配置
         Ort::SessionOptions sessionoptions;
         
